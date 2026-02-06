@@ -65,7 +65,7 @@ class GameConfig:
     # Model settings
     backend: str = "anthropic"
     backend_kwargs: dict = field(
-        default_factory=lambda: {"model_name": "claude-sonnet-4-5-20250929"}
+        default_factory=lambda: {"model_name": "claude-opus-4-6"}
     )
     sub_backend: str | None = None
     sub_backend_kwargs: dict | None = None

@@ -21,7 +21,7 @@ All settings live in `GameConfig` (`data_model.py`):
 | Field | Default | Description |
 |---|---|---|
 | `backend` | `"anthropic"` | LLM backend for the RLM |
-| `backend_kwargs` | `claude-sonnet-4-5-20250929` | Model parameters |
+| `backend_kwargs` | `claude-opus-4-6` | Model parameters |
 | `sub_backend` | `None` | Optional secondary backend for `llm_query()` calls |
 | `strategize_timeout` | 120s | Wall-clock limit for STRATEGIZE |
 | `converse_timeout` | 180s | Wall-clock limit for CONVERSE |
