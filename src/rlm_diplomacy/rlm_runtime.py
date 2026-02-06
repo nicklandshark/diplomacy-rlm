@@ -145,6 +145,24 @@ try:
                 self.client.messages.create = _orig_create
 
         _AC.completion = _patched_completion
+
+        # Opus models reject assistant-message prefill.  The RLM core can
+        # produce message lists ending with an assistant turn (e.g. in
+        # _default_answer or when format_iteration appends the model's own
+        # response).  Patch _prepare_messages to convert any trailing
+        # assistant message into a user message so the API never sees prefill.
+        _orig_prepare = _AC._prepare_messages
+
+        def _patched_prepare(self, prompt):
+            messages, system = _orig_prepare(self, prompt)
+            if messages and messages[-1].get("role") == "assistant":
+                messages[-1] = {
+                    "role": "user",
+                    "content": messages[-1]["content"],
+                }
+            return messages, system
+
+        _AC._prepare_messages = _patched_prepare
     except Exception:
         pass
 

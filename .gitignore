@@ -7,3 +7,6 @@ __pycache__/
 
 # So you can run a test game without committing it
 test_game_outputs/
+
+# Environment variables
+.env
