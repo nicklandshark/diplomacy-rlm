@@ -284,3 +284,86 @@ def test_agents_pass_environment_configuration_to_rlm(
     assert convo.rlm.environment == "modal"
     assert convo.rlm.persistent is False
     assert convo.rlm.environment_kwargs["app_name"] == "diplomacy-tests"
+
+
+def test_strategist_modal_export_failure_does_not_wipe_memory(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    from rlm_diplomacy.agents import strategist as strategist_module
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    class _DummyEnv:
+        def execute_code(self, _code: str) -> None:
+            return None
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    memory_path = Path(strategist.memory_path)
+    memory_path.write_text("KEEP_ME", encoding="utf-8")
+
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": "", "memory_ok": False},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "KEEP_ME"
+
+    # Backward-compat legacy payload with empty memory_text should also avoid wipe.
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": ""},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "KEEP_ME"
+
+
+def test_strategist_modal_export_success_updates_memory(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    from rlm_diplomacy.agents import strategist as strategist_module
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    class _DummyEnv:
+        def execute_code(self, _code: str) -> None:
+            return None
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    memory_path = Path(strategist.memory_path)
+    memory_path.write_text("OLD", encoding="utf-8")
+
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": "NEW", "memory_ok": True},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "NEW"

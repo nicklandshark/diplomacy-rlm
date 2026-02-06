@@ -550,7 +550,18 @@ class StrategistAgent:
             return
 
         memory_text = state.get("memory_text")
+        memory_ok = state.get("memory_ok")
+        should_write_memory = False
         if isinstance(memory_text, str):
+            if memory_ok is True:
+                should_write_memory = True
+            elif memory_ok is False:
+                logger.warning("%s modal memory export failed; keeping existing memory.", self.power_name)
+            else:
+                # Backward compatibility: old bridge payloads don't include memory_ok.
+                # Avoid wiping memory on empty legacy payloads.
+                should_write_memory = bool(memory_text)
+        if should_write_memory:
             try:
                 Path(self.memory_path).write_text(memory_text, encoding="utf-8")
             except Exception:

@@ -180,6 +180,7 @@ _bridge_allow_submit_orders = False
 _bridge_submitted_orders = None
 _bridge_expected_sender = None
 _bridge_chat_decision = None
+_bridge_last_memory_text = ""
 
 
 def _bridge_apply_state(state):
@@ -190,6 +191,7 @@ def _bridge_apply_state(state):
     global _bridge_submitted_orders
     global _bridge_expected_sender
     global _bridge_chat_decision
+    global _bridge_last_memory_text
 
     state = state or {{}}
     game_view._set_snapshot(state.get("game_view", {{}}))
@@ -208,21 +210,30 @@ def _bridge_apply_state(state):
     if isinstance(memory_text, str):
         with open(memory_path, "w", encoding="utf-8") as _bridge_file:
             _bridge_file.write(memory_text)
+        _bridge_last_memory_text = memory_text
 
 
 def _bridge_export_state():
     global _bridge_submitted_orders
     global _bridge_chat_decision
+    global _bridge_last_memory_text
 
-    memory_text = ""
+    memory_text = _bridge_last_memory_text
+    memory_ok = False
+    memory_error = None
     try:
         with open(memory_path, "r", encoding="utf-8") as _bridge_file:
             memory_text = _bridge_file.read()
-    except Exception:
-        memory_text = ""
+        _bridge_last_memory_text = memory_text
+        memory_ok = True
+    except Exception as _bridge_exc:
+        memory_ok = False
+        memory_error = str(_bridge_exc)
 
     exported = {{
         "memory_text": memory_text,
+        "memory_ok": memory_ok,
+        "memory_error": memory_error,
         "submitted_orders": _bridge_submitted_orders,
         "chat_decision": _bridge_chat_decision,
     }}
