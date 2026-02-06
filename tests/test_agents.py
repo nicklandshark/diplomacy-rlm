@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from rlm_diplomacy.data_model import GameConfig
 from rlm_diplomacy.game_view import GameView
@@ -113,6 +114,52 @@ def test_conversation_add_target_idempotent(
     agent.add_target("GERMANY", "probe")
     assert agent.targets.count("GERMANY") == 1
     assert agent.objectives["GERMANY"] == "probe"
+
+
+def test_strategist_discards_late_completion_side_effects(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    memory.initialize_all(["FRANCE", "GERMANY"])
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        max_retries=1,
+    )
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    strategist.rlm.queue_response("done")
+    strategist.bootstrap()
+
+    memory_path = Path(strategist.memory_path)
+    before_text = memory_path.read_text(encoding="utf-8")
+    strategist._submitted_orders = ["A PAR H"]
+
+    ticks = {"count": 0}
+
+    def remaining() -> float:
+        ticks["count"] += 1
+        if ticks["count"] < 3:
+            return 1.0
+        return -1.0
+
+    strategist._time_remaining_fn = remaining
+
+    def fake_completion(prompt: str, root_prompt: str | None = None):
+        _ = (prompt, root_prompt)
+        memory_path.write_text(before_text + "\nLATE_WRITE", encoding="utf-8")
+        return SimpleNamespace(response="done")
+
+    strategist.rlm.completion = fake_completion
+
+    result = strategist._run_completion_with_retries("", "prompt")
+    assert result is None
+    assert strategist._submitted_orders is None
+    assert memory_path.read_text(encoding="utf-8") == before_text
 
 
 def test_power_model_overrides_are_applied_per_power(

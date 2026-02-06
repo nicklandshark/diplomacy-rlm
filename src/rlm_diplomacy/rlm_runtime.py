@@ -7,6 +7,7 @@ package is missing, a lightweight scripted fallback is provided.
 from __future__ import annotations
 
 import functools
+import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -95,9 +96,9 @@ try:
     RLMChatCompletion = ExternalRLMChatCompletion
 
     # The RLM AnthropicClient doesn't pass stream or timeout to messages.create(),
-    # so the Anthropic SDK rejects non-streaming requests for models with low
-    # non-streaming token limits (e.g. Opus). Patch completion to pass an explicit
-    # timeout, which bypasses the SDK's client-side validation.
+    # so the Anthropic SDK can reject non-streaming requests for some models.
+    # Patch completion to pass an explicit timeout (default 120s, configurable via
+    # backend kwargs or RLM_ANTHROPIC_TIMEOUT_SECONDS).
     try:
         import httpx
         from rlm.clients.anthropic import AnthropicClient as _AC
@@ -107,8 +108,27 @@ try:
         def _patched_completion(self, prompt, model=None):
             _orig_create = self.client.messages.create
 
+            timeout_seconds = None
+            raw_kwargs = getattr(self, "kwargs", None)
+            if isinstance(raw_kwargs, dict):
+                timeout_seconds = raw_kwargs.get("request_timeout_seconds")
+                if timeout_seconds is None:
+                    timeout_seconds = raw_kwargs.get("timeout_seconds")
+
+            if timeout_seconds is None:
+                timeout_seconds = os.environ.get("RLM_ANTHROPIC_TIMEOUT_SECONDS")
+
+            try:
+                timeout_value = float(timeout_seconds) if timeout_seconds is not None else 120.0
+            except (TypeError, ValueError):
+                timeout_value = 120.0
+            timeout_value = max(1.0, timeout_value)
+
             def _create_with_timeout(**kwargs):
-                kwargs.setdefault("timeout", httpx.Timeout(timeout=600.0, connect=5.0))
+                kwargs.setdefault(
+                    "timeout",
+                    httpx.Timeout(timeout=timeout_value, connect=min(5.0, timeout_value)),
+                )
                 return _orig_create(**kwargs)
 
             self.client.messages.create = _create_with_timeout

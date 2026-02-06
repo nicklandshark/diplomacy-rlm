@@ -5,8 +5,11 @@ from __future__ import annotations
 import json
 import logging
 import shutil
+import threading
 import time
+import weakref
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+from concurrent.futures.thread import _threads_queues, _worker
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +27,33 @@ from .observability.events import PRIORITY_HIGH, PRIORITY_NORMAL
 from .timer import PhaseTimer
 
 logger = logging.getLogger(__name__)
+
+
+class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
+    """ThreadPoolExecutor variant whose worker threads are daemonic.
+
+    This prevents timed-out model calls from blocking process shutdown.
+    """
+
+    def _adjust_thread_count(self):  # type: ignore[override]
+        if self._idle_semaphore.acquire(timeout=0):
+            return
+
+        def weakref_cb(_, q=self._work_queue):
+            q.put(None)
+
+        num_threads = len(self._threads)
+        if num_threads < self._max_workers:
+            thread_name = f"{self._thread_name_prefix or self}_{num_threads}"
+            t = threading.Thread(
+                name=thread_name,
+                target=_worker,
+                args=(weakref.ref(self, weakref_cb), self._work_queue, self._initializer, self._initargs),
+            )
+            t.daemon = True
+            t.start()
+            self._threads.add(t)
+            _threads_queues[t] = self._work_queue
 
 
 class Orchestrator:
@@ -325,16 +355,17 @@ class Orchestrator:
             )
             return {}, set()
 
+        pool = _DaemonThreadPoolExecutor(max_workers=len(active_strategists))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=len(active_strategists)) as pool:
-            for power, strategist in active_strategists:
-                strategist.inject(timer, include_submit_orders=False)
-                futures[pool.submit(strategist.strategize, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.inject(timer, include_submit_orders=False)
+            futures[pool.submit(strategist.strategize, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
         if timed_out:
@@ -416,12 +447,13 @@ class Orchestrator:
                 payload={"round": round_num, "summary": f"round {round_num}"},
             )
 
-            with ThreadPoolExecutor(max_workers=len(active)) as pool:
-                futures = {pool.submit(agent.run_round, round_num): agent for agent in active}
-                done, not_done = wait(futures, timeout=timer.remaining())
-
-            for future in done:
-                future.result()
+            pool = _DaemonThreadPoolExecutor(max_workers=len(active))
+            futures = {pool.submit(agent.run_round, round_num): agent for agent in active}
+            _, not_done = self._wait_for_futures(
+                pool,
+                futures,
+                timeout=timer.remaining(),
+            )
             for future in not_done:
                 futures[future].force_finish()
 
@@ -485,16 +517,17 @@ class Orchestrator:
         timer = PhaseTimer(self.config.decide_timeout)
 
         active_strategists = list(self._active_controlled_strategists())
+        pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=max(1, len(active_strategists))) as pool:
-            for power, strategist in active_strategists:
-                strategist.inject(timer, include_submit_orders=True)
-                futures[pool.submit(strategist.decide, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.inject(timer, include_submit_orders=True)
+            futures[pool.submit(strategist.decide, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
         if timed_out:
@@ -536,16 +569,17 @@ class Orchestrator:
         timer = PhaseTimer(self.config.decide_timeout)
 
         active_strategists = list(self._active_controlled_strategists())
+        pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=max(1, len(active_strategists))) as pool:
-            for power, strategist in active_strategists:
-                strategist.inject(timer, include_submit_orders=True)
-                futures[pool.submit(strategist.decide, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.inject(timer, include_submit_orders=True)
+            futures[pool.submit(strategist.decide, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
         if timed_out:
@@ -886,3 +920,28 @@ class Orchestrator:
     def _log_event(self, event: dict[str, Any]) -> None:
         with self.game_log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True) + "\n")
+
+    def _wait_for_futures(
+        self,
+        pool: ThreadPoolExecutor,
+        futures: dict[Any, Any],
+        timeout: float | None,
+    ) -> tuple[set[Any], set[Any]]:
+        done: set[Any] = set()
+        not_done: set[Any] = set()
+        try:
+            done, not_done = wait(
+                futures,
+                timeout=max(0.0, float(timeout or 0.0)),
+            )
+            for future in done:
+                future.result()
+            return done, not_done
+        finally:
+            if not_done:
+                for future in not_done:
+                    future.cancel()
+                # Don't block phase progression on stuck model calls.
+                pool.shutdown(wait=False, cancel_futures=True)
+            else:
+                pool.shutdown(wait=True, cancel_futures=True)

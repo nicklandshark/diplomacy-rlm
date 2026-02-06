@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
+from rlm_diplomacy.agents.strategist import StrategistAgent
 from rlm_diplomacy.data_model import GameConfig
 from rlm_diplomacy.orchestrator import Orchestrator
 
@@ -84,3 +86,31 @@ def test_orchestrator_subset_powers(
     assert (tmp_game_dir / "FRANCE_memory.md").exists()
     assert (tmp_game_dir / "GERMANY_memory.md").exists()
     assert not (tmp_game_dir / "ITALY_memory.md").exists()
+
+
+def test_strategize_timeout_does_not_block_phase_progression(
+    patched_agent_rlm,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        strategize_timeout=0.01,
+        max_retries=1,
+    )
+    orchestrator = Orchestrator(config)
+
+    def _slow_strategize(self, phase: str) -> None:
+        _ = phase
+        time.sleep(0.25)
+
+    monkeypatch.setattr(StrategistAgent, "strategize", _slow_strategize)
+
+    start = time.monotonic()
+    requests, timed_out = orchestrator._run_strategize_step("S1901M")
+    elapsed = time.monotonic() - start
+
+    assert requests == {}
+    assert timed_out == {"FRANCE", "GERMANY"}
+    assert elapsed < 0.2

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import difflib
 import logging
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -71,6 +72,7 @@ class StrategistAgent:
         self._modal_incoming_sender: str | None = None
         self._modal_incoming_decision: dict[str, Any] | None = None
         self._modal_memory_path = f"/tmp/{self.power_name}_memory.md"
+        self._completion_lock = threading.Lock()
 
         blocked = set(config.blocked_modules) if config.blocked_modules is not None else None
         policy_memory_path = self._modal_memory_path if self._is_modal else self.memory_path
@@ -181,8 +183,22 @@ class StrategistAgent:
             "or FINAL(done) if skipping negotiation."
         )
 
+        deadline_fn = self._time_remaining_fn
         with patched_rlm_parser():
-            result = self._run_completion_with_retries("", root_prompt)
+            result = self._run_completion_with_retries(
+                "",
+                root_prompt,
+                deadline_fn=deadline_fn,
+            )
+        if result is None:
+            self._events.emit(
+                "agent.status",
+                power=self.power_name,
+                phase=phase,
+                step="STRATEGIZE",
+                payload={"status": "TIMEOUT", "role": "STRATEGIST", "step": "STRATEGIZE"},
+            )
+            return
 
         response = result.response if result is not None else ""
         objectives = parse_spawn_completion(response)
@@ -243,12 +259,26 @@ class StrategistAgent:
         )
         self._submitted_orders = None
 
+        deadline_fn = self._time_remaining_fn
         root_prompt = (
             f"Phase: {phase}. DECIDE step. You have {self._time_left_for_prompt()}s remaining. "
             "Use conversation_results and unread_messages. Choose final legal orders, "
             "call submit_orders([...]) once, update memory, then FINAL(done)."
         )
-        self._run_completion_with_retries("", root_prompt)
+        result = self._run_completion_with_retries(
+            "",
+            root_prompt,
+            deadline_fn=deadline_fn,
+        )
+        if result is None:
+            self._events.emit(
+                "agent.status",
+                power=self.power_name,
+                phase=phase,
+                step="DECIDE",
+                payload={"status": "TIMEOUT", "role": "STRATEGIST", "step": "DECIDE"},
+            )
+            return
         self._events.emit(
             "agent.status",
             power=self.power_name,
@@ -267,7 +297,11 @@ class StrategistAgent:
                 "Call accept_chat(sender, objective) or decline_chat(sender), then FINAL(done)."
             )
             try:
-                self._run_completion_with_retries("", root_prompt)
+                self._run_completion_with_retries(
+                    "",
+                    root_prompt,
+                    deadline_fn=self._time_remaining_fn,
+                )
             finally:
                 self._modal_incoming_sender = None
             decision = self._modal_incoming_decision or {"accepted": False, "objective": ""}
@@ -303,7 +337,11 @@ class StrategistAgent:
             )
 
             try:
-                self._run_completion_with_retries("", root_prompt)
+                self._run_completion_with_retries(
+                    "",
+                    root_prompt,
+                    deadline_fn=self._time_remaining_fn,
+                )
             finally:
                 env.globals.pop("accept_chat", None)
                 env.globals.pop("decline_chat", None)
@@ -340,77 +378,101 @@ class StrategistAgent:
         elif hasattr(self.rlm, "_persistent_env"):
             self.rlm._persistent_env = None
 
-    def _run_completion_with_retries(self, prompt: str, root_prompt: str):
+    def _run_completion_with_retries(
+        self,
+        prompt: str,
+        root_prompt: str,
+        deadline_fn: Callable[[], float] | None = None,
+    ):
+        if not self._acquire_completion_slot(deadline_fn):
+            return None
+
         max_retries = self.config.max_retries
-        for attempt in range(max_retries):
-            try:
-                self._events.emit(
-                    "agent.completion.start",
-                    power=self.power_name,
-                    payload={
-                        "attempt": attempt + 1,
-                        "summary": f"attempt={attempt + 1}",
-                    },
-                )
-                if self.config.observe_prompts:
+        try:
+            for attempt in range(max_retries):
+                if self._step_deadline_exceeded(deadline_fn):
+                    return None
+                try:
                     self._events.emit(
-                        "agent.prompt",
+                        "agent.completion.start",
                         power=self.power_name,
-                        priority=PRIORITY_NORMAL,
                         payload={
-                            "text": str(root_prompt),
-                            "summary": str(root_prompt),
+                            "attempt": attempt + 1,
+                            "summary": f"attempt={attempt + 1}",
                         },
                     )
+                    if self.config.observe_prompts:
+                        self._events.emit(
+                            "agent.prompt",
+                            power=self.power_name,
+                            priority=PRIORITY_NORMAL,
+                            payload={
+                                "text": str(root_prompt),
+                                "summary": str(root_prompt),
+                            },
+                        )
 
-                before_text = self._memory_text_or_empty()
-                self._ensure_base_injection()
-                result = self.rlm.completion(prompt, root_prompt=root_prompt)
-                after_text = self._memory_text_or_empty()
+                    before_text = self._memory_text_or_empty()
+                    self._ensure_base_injection()
+                    result = self.rlm.completion(prompt, root_prompt=root_prompt)
+                    after_text = self._memory_text_or_empty()
 
-                response_text = str(getattr(result, "response", ""))
-                if self.config.observe_repl:
-                    self._events.emit(
-                        "agent.repl",
-                        power=self.power_name,
-                        payload={"text": response_text, "summary": response_text},
-                    )
-                else:
-                    self._events.emit(
-                        "agent.completion.finish",
-                        power=self.power_name,
-                        payload={"summary": "completion finished"},
-                    )
+                    if self._step_deadline_exceeded(deadline_fn):
+                        if after_text != before_text:
+                            try:
+                                Path(self.memory_path).write_text(before_text, encoding="utf-8")
+                            except Exception:
+                                pass
+                        self._submitted_orders = None
+                        return None
 
-                self._emit_memory_diff(before_text, after_text)
-                return result
-            except Exception as exc:  # pragma: no cover - exercised with mocked failures
-                if attempt >= max_retries - 1:
+                    response_text = str(getattr(result, "response", ""))
+                    if self.config.observe_repl:
+                        self._events.emit(
+                            "agent.repl",
+                            power=self.power_name,
+                            payload={"text": response_text, "summary": response_text},
+                        )
+                    else:
+                        self._events.emit(
+                            "agent.completion.finish",
+                            power=self.power_name,
+                            payload={"summary": "completion finished"},
+                        )
+
+                    self._emit_memory_diff(before_text, after_text)
+                    return result
+                except Exception as exc:  # pragma: no cover - exercised with mocked failures
+                    if self._step_deadline_exceeded(deadline_fn):
+                        return None
+                    if attempt >= max_retries - 1:
+                        self._events.emit(
+                            "agent.error",
+                            power=self.power_name,
+                            priority=PRIORITY_HIGH,
+                            payload={"summary": f"completion failed after {max_retries} retries: {exc}"},
+                        )
+                        raise GameHaltError(
+                            f"{self.power_name} completion() failed {max_retries} times"
+                        ) from exc
                     self._events.emit(
-                        "agent.error",
+                        "agent.retry",
                         power=self.power_name,
-                        priority=PRIORITY_HIGH,
-                        payload={"summary": f"completion failed after {max_retries} retries: {exc}"},
+                        payload={
+                            "attempt": attempt + 1,
+                            "summary": f"retry {attempt + 1}/{max_retries}",
+                        },
                     )
-                    raise GameHaltError(
-                        f"{self.power_name} completion() failed {max_retries} times"
-                    ) from exc
-                self._events.emit(
-                    "agent.retry",
-                    power=self.power_name,
-                    payload={
-                        "attempt": attempt + 1,
-                        "summary": f"retry {attempt + 1}/{max_retries}",
-                    },
-                )
-                logger.warning(
-                    "%s completion retry %s/%s failed: %s",
-                    self.power_name,
-                    attempt + 1,
-                    max_retries,
-                    exc,
-                )
-        raise GameHaltError(f"{self.power_name} completion() retries exhausted")
+                    logger.warning(
+                        "%s completion retry %s/%s failed: %s",
+                        self.power_name,
+                        attempt + 1,
+                        max_retries,
+                        exc,
+                    )
+            raise GameHaltError(f"{self.power_name} completion() retries exhausted")
+        finally:
+            self._completion_lock.release()
 
     def _ensure_base_injection(self, env: Any | None = None) -> None:
         if self._is_modal:
@@ -579,6 +641,29 @@ class StrategistAgent:
             except Exception:
                 return 0
         return 0
+
+    def _step_deadline_exceeded(self, deadline_fn: Callable[[], float] | None = None) -> bool:
+        active_deadline = deadline_fn or self._time_remaining_fn
+        if active_deadline is None:
+            return False
+        try:
+            return float(active_deadline()) <= 0.0
+        except Exception:
+            return False
+
+    def _acquire_completion_slot(self, deadline_fn: Callable[[], float] | None = None) -> bool:
+        active_deadline = deadline_fn or self._time_remaining_fn
+        if active_deadline is None:
+            self._completion_lock.acquire()
+            return True
+
+        try:
+            remaining = max(0.0, float(active_deadline()))
+        except Exception:
+            return False
+        if remaining <= 0.0:
+            return False
+        return self._completion_lock.acquire(timeout=remaining)
 
     def _memory_text_or_empty(self) -> str:
         try:
