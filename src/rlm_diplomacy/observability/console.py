@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import re
 import sys
@@ -121,8 +122,16 @@ class ConsoleEventLogger(EventEmitter):
             event.event_id = self._next_id
             self._next_id += 1
             line = format_event_line(event, options=self.options)
-            self._stream.write(line + "\n")
-            self._stream.flush()
+            try:
+                self._stream.write(line + "\n")
+                self._stream.flush()
+            except BrokenPipeError:
+                self._closed = True
+            except OSError as exc:
+                if exc.errno == errno.EPIPE:
+                    self._closed = True
+                    return
+                raise
 
     def close(self) -> None:
         with self._lock:

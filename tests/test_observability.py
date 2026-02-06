@@ -13,6 +13,18 @@ from rlm_diplomacy.observability.events import ObservableEvent
 from rlm_diplomacy.observability.events import PRIORITY_CRITICAL
 
 
+class _BrokenPipeStream:
+    def __init__(self) -> None:
+        self.writes = 0
+
+    def write(self, _text: str) -> int:
+        self.writes += 1
+        raise BrokenPipeError()
+
+    def flush(self) -> None:
+        return None
+
+
 def test_buffered_event_bus_priority_drop_policy() -> None:
     bus = BufferedEventBus(max_events=3)
     bus.emit("debug.a", priority=3)
@@ -25,6 +37,21 @@ def test_buffered_event_bus_priority_drop_policy() -> None:
     assert "critical" in names
     assert len(events) == 3
     assert bus.drop_stats().total >= 1
+
+
+def test_buffered_event_bus_prefers_dropping_lower_priority_events() -> None:
+    bus = BufferedEventBus(max_events=3)
+    bus.emit("high.keep", priority=1)
+    bus.emit("debug.drop", priority=3)
+    bus.emit("normal.keep", priority=2)
+    bus.emit("critical", priority=PRIORITY_CRITICAL)
+
+    names = [event.event_type for event in bus.poll(10)]
+    assert "critical" in names
+    assert "high.keep" in names
+    assert "normal.keep" in names
+    assert "debug.drop" not in names
+    assert bus.drop_stats().debug >= 1
 
 
 def test_recorder_emitter_records_events() -> None:
@@ -112,3 +139,15 @@ def test_console_event_logger_close_stops_emission() -> None:
     lines = [line for line in out.getvalue().splitlines() if line.strip()]
     assert len(lines) == 1
     assert "first.event" in lines[0]
+
+
+def test_console_event_logger_handles_broken_pipe() -> None:
+    stream = _BrokenPipeStream()
+    logger = ConsoleEventLogger(
+        stream=stream,
+        options=ConsoleLogOptions(include_timestamp=False),
+    )
+
+    logger.emit("first.event")
+    logger.emit("second.event")
+    assert stream.writes == 1

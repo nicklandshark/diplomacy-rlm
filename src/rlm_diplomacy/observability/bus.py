@@ -149,28 +149,34 @@ class BufferedEventBus(EventEmitter):
 
     def _make_room(self, incoming_priority: int) -> bool:
         if incoming_priority <= PRIORITY_HIGH:
-            victim = self._find_first_victim(min_priority=incoming_priority + 1)
-            if victim is None:
+            victim_idx = self._find_lowest_priority_victim(min_priority=incoming_priority + 1)
+            if victim_idx is None:
                 return False
-            del self._events[victim]
-            self._record_drop(PRIORITY_DEBUG if incoming_priority == PRIORITY_CRITICAL else PRIORITY_NORMAL)
+            victim = self._events[victim_idx]
+            del self._events[victim_idx]
+            self._record_drop(victim.priority)
             return True
 
         if incoming_priority == PRIORITY_NORMAL:
-            victim = self._find_first_victim(min_priority=PRIORITY_DEBUG)
-            if victim is None:
+            victim_idx = self._find_lowest_priority_victim(min_priority=PRIORITY_DEBUG)
+            if victim_idx is None:
                 return False
-            del self._events[victim]
-            self._record_drop(PRIORITY_DEBUG)
+            victim = self._events[victim_idx]
+            del self._events[victim_idx]
+            self._record_drop(victim.priority)
             return True
 
         return False
 
-    def _find_first_victim(self, min_priority: int) -> int | None:
+    def _find_lowest_priority_victim(self, min_priority: int) -> int | None:
+        best_idx: int | None = None
+        best_priority = -1
         for idx, event in enumerate(self._events):
             if event.priority >= min_priority:
-                return idx
-        return None
+                if best_idx is None or event.priority > best_priority:
+                    best_idx = idx
+                    best_priority = event.priority
+        return best_idx
 
     def _record_drop(self, priority: int) -> None:
         self._drops.total += 1
