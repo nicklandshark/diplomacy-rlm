@@ -102,7 +102,7 @@ All agents run in parallel via `ThreadPoolExecutor`. Timed-out agents receive sa
 ## Running
 
 ```bash
-pip install -e .
+uv pip install -e .
 diplomacy-rlm --game-dir ./my_game --max-year 1910 --verbose
 ```
 
@@ -154,7 +154,7 @@ orch.run()
 ## Development
 
 ```bash
-pip install -e ".[dev]"
+uv pip install -e ".[dev]"
 pytest
 ```
 
