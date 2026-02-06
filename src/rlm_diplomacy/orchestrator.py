@@ -7,9 +7,7 @@ import logging
 import shutil
 import threading
 import time
-import weakref
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait
-from concurrent.futures.thread import _threads_queues, _worker
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any
 
@@ -29,31 +27,64 @@ from .timer import PhaseTimer
 logger = logging.getLogger(__name__)
 
 
-class _DaemonThreadPoolExecutor(ThreadPoolExecutor):
-    """ThreadPoolExecutor variant whose worker threads are daemonic.
+class _BestEffortDaemonPool:
+    """Small daemon-thread pool with public-API futures only.
 
-    This prevents timed-out model calls from blocking process shutdown.
+    Timed-out tasks are best-effort: the caller can stop waiting while daemon
+    threads continue in the background, so process shutdown is not blocked.
     """
 
-    def _adjust_thread_count(self):  # type: ignore[override]
-        if self._idle_semaphore.acquire(timeout=0):
-            return
+    def __init__(self, max_workers: int, thread_name_prefix: str = "orchestrator"):
+        self._max_workers = max(1, int(max_workers))
+        self._thread_name_prefix = thread_name_prefix
+        self._lock = threading.Lock()
+        self._shutdown = False
+        self._active_threads: set[threading.Thread] = set()
+        self._next_id = 0
 
-        def weakref_cb(_, q=self._work_queue):
-            q.put(None)
+    def submit(self, fn, *args, **kwargs) -> Future:
+        with self._lock:
+            if self._shutdown:
+                raise RuntimeError("cannot schedule new futures after shutdown")
+            if len(self._active_threads) >= self._max_workers:
+                raise RuntimeError("max_workers exceeded for daemon pool")
+            thread_id = self._next_id
+            self._next_id += 1
+            future: Future = Future()
 
-        num_threads = len(self._threads)
-        if num_threads < self._max_workers:
-            thread_name = f"{self._thread_name_prefix or self}_{num_threads}"
-            t = threading.Thread(
-                name=thread_name,
-                target=_worker,
-                args=(weakref.ref(self, weakref_cb), self._work_queue, self._initializer, self._initargs),
+            def _runner() -> None:
+                try:
+                    if not future.set_running_or_notify_cancel():
+                        return
+                    result = fn(*args, **kwargs)
+                    future.set_result(result)
+                except BaseException as exc:
+                    future.set_exception(exc)
+                finally:
+                    with self._lock:
+                        self._active_threads.discard(thread)
+
+            thread = threading.Thread(
+                target=_runner,
+                name=f"{self._thread_name_prefix}-{thread_id}",
+                daemon=True,
             )
-            t.daemon = True
-            t.start()
-            self._threads.add(t)
-            _threads_queues[t] = self._work_queue
+            self._active_threads.add(thread)
+
+        thread.start()
+        return future
+
+    def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+        with self._lock:
+            self._shutdown = True
+            active_threads = list(self._active_threads)
+        if cancel_futures:
+            # We cannot force-stop running daemon threads, but callers still cancel
+            # pending futures for consistent bookkeeping.
+            pass
+        if wait:
+            for thread in active_threads:
+                thread.join()
 
 
 class Orchestrator:
@@ -356,7 +387,7 @@ class Orchestrator:
             )
             return {}, set()
 
-        pool = _DaemonThreadPoolExecutor(max_workers=len(active_strategists))
+        pool = _BestEffortDaemonPool(max_workers=len(active_strategists))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
             strategist.activate_step_token(step_token)
@@ -456,7 +487,7 @@ class Orchestrator:
                 payload={"round": round_num, "summary": f"round {round_num}"},
             )
 
-            pool = _DaemonThreadPoolExecutor(max_workers=len(active))
+            pool = _BestEffortDaemonPool(max_workers=len(active))
             futures = {}
             for agent in active:
                 agent.activate_round_token(round_token)
@@ -535,7 +566,7 @@ class Orchestrator:
         timer = PhaseTimer(self.config.decide_timeout)
 
         active_strategists = list(self._active_controlled_strategists())
-        pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
+        pool = _BestEffortDaemonPool(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
             strategist.activate_step_token(step_token)
@@ -596,7 +627,7 @@ class Orchestrator:
         step_token = f"{phase}:DECIDE_ONLY:{time.monotonic_ns()}"
 
         active_strategists = list(self._active_controlled_strategists())
-        pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
+        pool = _BestEffortDaemonPool(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
             strategist.activate_step_token(step_token)
@@ -958,7 +989,7 @@ class Orchestrator:
 
     def _wait_for_futures(
         self,
-        pool: ThreadPoolExecutor,
+        pool: _BestEffortDaemonPool,
         futures: dict[Any, Any],
         timeout: float | None,
     ) -> tuple[set[Any], set[Any]]:
