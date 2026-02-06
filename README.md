@@ -1,6 +1,4 @@
-# Diplomacy-RLM: Claude Opus 4.6 Two-Power Webserver Guide
-
-This README is the current, step-by-step guide for running a **two-power** Diplomacy game with **Claude Opus 4.6** (`claude-opus-4-6`), then serving the run output on a webserver.
+# Diplomacy-RLM
 
 ## What You Are Running
 
