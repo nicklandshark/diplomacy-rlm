@@ -106,6 +106,48 @@ def test_cli_main_builds_backend_and_sandbox_config(
     assert orchestrator.config.environment_kwargs["timeout"] == 900
 
 
+def test_cli_main_builds_backend_scoped_and_power_scoped_backend_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
+
+    cli_module.main(
+        [
+            "--game-dir",
+            str(tmp_path / "game"),
+            "--powers",
+            "FRANCE,GERMANY",
+            "--backend",
+            "openai",
+            "--model",
+            "gpt-4.1-mini",
+            "--backend-arg",
+            "api_key=openai-root-key",
+            "--power-backend",
+            "FRANCE=anthropic",
+            "--power-model",
+            "FRANCE=claude-sonnet-4-5",
+            "--backend-arg-for",
+            "anthropic.api_key=anthropic-shared-key",
+            "--power-backend-arg",
+            "FRANCE.base_url=https://api.example.com",
+        ]
+    )
+
+    assert len(_DummyOrchestrator.instances) == 1
+    orchestrator = _DummyOrchestrator.instances[0]
+    assert orchestrator.ran is True
+    assert orchestrator.config.backend_kwargs_by_backend["anthropic"]["api_key"] == "anthropic-shared-key"
+    assert (
+        orchestrator.config.power_backend_kwargs_overrides["FRANCE"]["base_url"]
+        == "https://api.example.com"
+    )
+    assert orchestrator.config.backend_kwargs_for("GERMANY")["api_key"] == "openai-root-key"
+    assert orchestrator.config.backend_kwargs_for("FRANCE")["api_key"] == "anthropic-shared-key"
+    assert orchestrator.config.backend_kwargs_for("FRANCE")["model_name"] == "claude-sonnet-4-5"
+
+
 def test_cli_rejects_power_model_outside_selected_powers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -137,6 +179,52 @@ def test_cli_rejects_power_backend_outside_selected_powers(
                 "FRANCE,GERMANY",
                 "--power-backend",
                 "ITALY=openai",
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert not _DummyOrchestrator.instances
+
+
+def test_cli_rejects_bad_backend_arg_for_format(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_module.main(
+            [
+                "--powers",
+                "FRANCE,GERMANY",
+                "--model",
+                "gpt-4.1-mini",
+                "--backend",
+                "openai",
+                "--backend-arg-for",
+                "anthropic=api_key",
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert not _DummyOrchestrator.instances
+
+
+def test_cli_rejects_power_backend_arg_outside_selected_powers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_module.main(
+            [
+                "--powers",
+                "FRANCE,GERMANY",
+                "--model",
+                "gpt-4.1-mini",
+                "--backend",
+                "openai",
+                "--power-backend-arg",
+                "ITALY.api_key=secret",
             ]
         )
 
