@@ -1,8 +1,11 @@
 # Diplomacy-RLM: Technical Specification
 
-todo:
-- objective
-- tests
+## Objective
+
+1. Read the reference materials in `.tmp/` — the RLM library, vendored diplomacy engine, AI_Diplomacy harness, twenty_questions example, and the research paper
+2. Read this spec in full
+3. Write the code
+4. Run the tests in `tests/` based on `tests/TESTS.md`
 
 ## Overview
 
@@ -2867,5 +2870,99 @@ The conversation agent is not told what other conversations its counterpart is i
 This is realistic — in real Diplomacy, you don't know who else your counterpart is negotiating with (unless they tell you, which may be a lie). It also simplifies the system: the orchestrator doesn't need to compute and inject a peer map.
 
 If the strategist wants the diplomat to know something about the broader diplomatic landscape, it can include that in the objective: "Propose alliance with England. Note: England is likely also talking to Russia. Be cautious about promises regarding Scandinavia."
+
+---
+
+## Tests
+
+The full test plan lives in `tests/TESTS.md` — 452 tests across 24 sections. This section describes the testing philosophy, structure, and what makes testing this system different from a typical application.
+
+### Why Testing Is Hard Here
+
+The core challenge: the system runs **untrusted LLM-generated code** inside a REPL. Every agent is an adversary — not because we expect the LLM to be malicious, but because any prompt injection, hallucination, or creative coding attempt could accidentally (or intentionally) break isolation. The test suite must prove two things simultaneously:
+
+1. **Capabilities work**: The game loop advances, messages route correctly, orders resolve, agents negotiate and submit.
+2. **Constraints hold**: A compromised agent cannot read another power's messages, mutate game state, escape the sandbox, forge orders, or escalate privileges.
+
+These two axes organize the entire test plan.
+
+### No Real LLM Calls
+
+Every test uses mock LLM backends with canned responses. The system under test is the harness — GameView, MessageRouter, Orchestrator, StrategistAgent, ConversationAgent, sentinel parsing, order validation, concurrency, and the trust boundaries between them. The LLM is a black box that produces text; we mock it to control exactly what text it produces, then verify the harness handles it correctly.
+
+This means tests are fast, deterministic, and don't require API keys.
+
+### Two Axes
+
+**Axis 1 — Capabilities** (sections 1–15, 347 tests): Vendored engine correctness, data model types, GameView read methods, FilteredGameView scoping, MemoryManager file operations, MessageRouter thread safety and flush atomicity, sentinel parsing, strategist lifecycle (bootstrap → strategize → deliver results → decide → close), conversation agent lifecycle (create → rounds → FINAL → destroy), orchestrator game loop (phase progression, eliminated powers, three-step flow), order validation and engine integration, concurrency (7-way parallelism, port isolation, orphaned threads), RLM persistent environment and backend routing, snapshot save/restore, and game log observability.
+
+**Axis 2 — Security** (sections 16–24, 105 tests): GameView mutation attacks (reaching `_game` via `__dict__`, `object.__getattribute__`, Power back-references), monkey-patching (class reassignment, function replacement), privilege separation (conversation agents can't submit orders; strategists can't send messages during DECIDE), REPL sandbox escapes (`os.system`, `subprocess`, `socket`, `ctypes`, `gc.get_objects()`), information leakage (cross-power message visibility, memory file enumeration, REPL variable isolation), temporal attacks (timer replacement, sleep-past-deadline), message router attacks (sender spoofing, closure-based premature flush), serialization attacks (malicious `__reduce__` in dill), and resource bounds (iteration limits, message floods).
+
+### Priority Levels
+
+| Priority | Count | Gate |
+|----------|-------|------|
+| P0 | 266 | Must pass before any game runs |
+| P1 | 121 | Must pass before multi-agent games |
+| P2 | 53 | Should pass before release |
+| P3 | 12 | Nice to have |
+
+P0 tests are pure unit tests — instantiate a real `Game`, wrap it in a `GameView`, run adversarial code, check that state didn't change. No threading, no mocked agents, no complex setup. P1 tests add integration: multiple agents in parallel, message routing across rounds, mock strategists with scripted behavior. P2 tests cover edge cases and hardening. P3 tests are observability (game log format) and defense-in-depth.
+
+### Key Invariants Under Test
+
+The test plan encodes these invariants, each verified by multiple tests:
+
+1. **GameView is read-only**: No path from a GameView reference reaches a mutating method on the underlying Game. Tested via direct attribute access, `__dict__` traversal, `object.__getattribute__`, and Power object back-references.
+
+2. **Round isolation**: Messages queued in round N are invisible until `router.flush()`. No agent can see another agent's outboxed message from the current round. Tested from both the router side (COM tests) and the agent side (CA tests).
+
+3. **Once-only order submission**: `submit_orders()` accepts one call per phase. A second call returns an error and preserves the first submission. The lock resets between phases. Tested in both the strategist contract (SA tests) and the order validation pipeline (ORD tests).
+
+4. **Privilege separation**: Conversation agents have `send_message` but not `submit_orders`. Strategists have `submit_orders` (during DECIDE only) but not `send_message`. Conversation agents get `memory_snapshot` (a string copy); strategists get `memory_path` (file access). Tested by checking NameError on the missing functions.
+
+5. **Conversation agent crashes don't halt the game**: A conversation agent that fails after max retries is force-finished with a crash summary. The strategist receives this summary and proceeds to DECIDE. Only strategist failures raise `GameHaltError`.
+
+6. **Flush atomicity**: `router.flush()` commits all pending messages from all outboxes in one operation. After flush, all outboxes are empty. The commit order is deterministic (`ALL_POWERS` order within each power's queue).
+
+### Test Fixtures
+
+Nine pytest fixtures cover the common setup patterns:
+
+| Fixture | Description |
+|---------|-------------|
+| `fresh_game()` | New `Game()` at S1901M |
+| `game_at_retreat()` | Game advanced to a retreat phase with a dislodged unit |
+| `game_at_adjustment()` | Game advanced to W1901A with supply center changes |
+| `mock_strategist(power)` | StrategistAgent with mock RLM, REPL initialized |
+| `mock_conversation_agent(power, targets)` | ConversationAgent with mock RLM |
+| `game_view(power)` | GameView wrapping a fresh game |
+| `filtered_game_view(power, targets)` | FilteredGameView wrapping a fresh game |
+| `memory_manager(tmp_dir)` | MemoryManager with a temp directory |
+| `message_router(game)` | MessageRouter bound to a game |
+
+### Dependencies
+
+- `pytest` — test framework
+- `threading` — concurrency tests (barriers, events, locks)
+- `time` (monotonic) — timing assertions and ordering verification
+- `dill` — snapshot serialization tests
+- `tempfile` — isolated memory manager tests
+
+No LLM API keys, no network access, no external services.
+
+### Design Findings
+
+The test plan analysis surfaced implementation concerns that need attention during development:
+
+1. **FilteredGameView operator precedence**: The filter predicate `(sender == self or recipient == self) and (other_party in targets) or recipient == "GLOBAL"` relies on `and` binding tighter than `or`. GLOBAL messages bypass the power_name check entirely. This is likely intentional but should be parenthesized explicitly to prevent bugs during refactoring.
+
+2. **`open()` and `__import__()` in the sandbox**: The spec allows both. This means agents can `import os`, `import socket`, etc. A module blocklist is required, and `open()` needs path restriction to prevent cross-power memory file reads.
+
+3. **Live reference in GameView**: GameView holds a reference to the real Game object, not a copy. If the `_game` attribute is reachable, a compromised agent can call `set_orders()`, `process()`, or `add_message()` on the live game. Defense must happen at the attribute access level.
+
+4. **FilteredGameView must override `get_message_history()`**: If only `get_messages()` is overridden, historical messages from non-target powers leak through `get_message_history()`.
+
+5. **Dill deserialization as attack surface**: Tampered dill snapshot files can execute arbitrary code via `__reduce__`. Snapshot restoration is a trusted-input channel that needs validation or sandboxing.
 
 ---
