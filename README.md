@@ -1,46 +1,39 @@
 # Diplomacy-RLM
 
-## What You Are Running
+Run autonomous Diplomacy powers with an RLM-backed Python runtime, and watch the game live in the built-in web viewer (SSE updates).
 
-- `diplomacy-rlm` runs autonomous Diplomacy agents (powers) with an RLM-backed Python REPL.
-- The run output is written to a folder (`game_log.jsonl`, snapshots, memory files).
-- This repo does not include a bundled browser UI. You can serve the output directory over HTTP and inspect files in browser or connect your own viewer.
+## Quickstart: Two Powers on Claude Opus 4.6 + Live Web Viewer
 
-## 1. Prerequisites
+### 1) Prerequisites
 
 - Python `>=3.11`
-- `uv` installed
-- Anthropic API key with access to Claude Opus 4.6
+- [`uv`](https://docs.astral.sh/uv/)
+- [`bun`](https://bun.sh/) (required for `--serve-web`)
+- Anthropic API key with Opus access
 
-Install `uv` if needed:
+### 2) Install backend + web dependencies
 
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-## 2. Install This Project
-
-From this repository root:
+From repo root:
 
 ```bash
-uv pip install -e .
+uv pip install -e ".[web]"
 ```
 
-## 3. Set Your Anthropic API Key
+Install frontend dependencies:
+
+```bash
+cd web
+bun install
+cd ..
+```
+
+### 3) Export API key
 
 ```bash
 export ANTHROPIC_API_KEY="your-key-here"
 ```
 
-Optional check:
-
-```bash
-echo "$ANTHROPIC_API_KEY" | wc -c
-```
-
-## 4. Run Two Powers on Claude Opus 4.6
-
-This command runs two controlled powers (`FRANCE`, `GERMANY`) using Claude Opus 4.6:
+### 4) Run game + web server together
 
 ```bash
 uv run diplomacy-rlm \
@@ -51,76 +44,69 @@ uv run diplomacy-rlm \
   --power-model FRANCE=claude-opus-4-6 \
   --power-model GERMANY=claude-opus-4-6 \
   --max-year 1903 \
+  --serve-web \
+  --web-port 3000 \
   --log-events \
   --verbose
 ```
 
-Notes:
+The CLI will print a URL like:
 
-- `--powers FRANCE,GERMANY` is the two-power selection.
-- `--backend-arg-for anthropic.model_name=claude-opus-4-6` sets the Anthropic model explicitly.
-- The run writes output to `./runs/opus46-two-power`.
+`http://localhost:3000/game/<game_id>`
 
-## 5. Run the Webserver for Output
+Open that in your browser for the live viewer.
 
-Serve the run directory:
+## What `--serve-web` Starts
 
-```bash
-python -m http.server 8080 --bind 0.0.0.0 --directory ./runs/opus46-two-power
-```
+- A local FastAPI SSE stream for live observability events.
+- A Next.js dev server from `web/`.
+- The game run itself (`Orchestrator`), all in one command.
 
-Open:
+## Output Files
 
-- `http://localhost:8080` (local machine)
-- `http://<server-ip>:8080` (remote access)
-
-You will see files like:
+Game output goes to your `--game-dir`, for example:
 
 - `game_log.jsonl`
-- `snapshots/`
-- `FRANCE_memory.md`
-- `GERMANY_memory.md`
+- `snapshots/<phase>/...`
+- `FRANCE_memory.md`, `GERMANY_memory.md`
 
-## 6. Typical Remote Server Workflow
+## Run Without the Web Viewer
 
-Run game (example in background):
+If you only want the game run:
 
 ```bash
-nohup uv run diplomacy-rlm \
-  --game-dir /srv/diplomacy/opus46-two-power \
+uv run diplomacy-rlm \
+  --game-dir ./runs/opus46-two-power \
   --powers FRANCE,GERMANY \
   --backend anthropic \
   --backend-arg-for anthropic.model_name=claude-opus-4-6 \
-  --max-year 1903 \
-  --log-events \
-  --verbose > /srv/diplomacy/opus46-two-power/run.log 2>&1 &
+  --max-year 1903
 ```
 
-Serve output:
+## Useful Flags
 
-```bash
-python -m http.server 8080 --bind 0.0.0.0 --directory /srv/diplomacy/opus46-two-power
-```
+- `--serve-web`: launch live web viewer + SSE API.
+- `--web-port <port>`: choose web viewer port (`0` auto-selects).
+- `--powers A,B`: select controlled powers (minimum 2).
+- `--power-backend POWER=BACKEND`: per-power backend override.
+- `--backend-arg-for BACKEND.KEY=VALUE`: backend-scoped kwargs.
+- `--power-backend-arg POWER.KEY=VALUE`: power-scoped backend kwargs.
+- `--log-events`: print structured runtime events.
 
-## 7. Useful Flags for This Setup
+## Common Issues
 
-- `--powers FRANCE,GERMANY`: exactly two controlled powers.
-- `--backend anthropic`: use Anthropic backend.
-- `--backend-arg-for anthropic.model_name=claude-opus-4-6`: set Opus 4.6.
-- `--max-year 1903`: shorten runs while testing.
-- `--log-events --verbose`: show structured runtime events.
+- `bun: command not found`
+  - Install bun, then run `cd web && bun install`.
+- `No model specified for powers ...`
+  - Provide `--model`, `--backend-arg-for ...model_name=...`, or `--power-model`.
+- Viewer starts but no live updates
+  - Make sure you launched with `--serve-web` (not just `web` frontend manually).
+- Port already in use
+  - Change `--web-port` or set `--web-port 0` to auto-pick.
 
-## 8. Troubleshooting
+## Development
 
-- `No model specified for powers ...`:
-  - Add `--backend-arg-for anthropic.model_name=claude-opus-4-6` or `--power-model` values.
-- `ANTHROPIC_API_KEY` auth issues:
-  - Re-export the key and verify the shell running `uv` has it.
-- Cannot access webserver remotely:
-  - Check firewall/security group for port `8080`.
-  - Confirm server binds `0.0.0.0`.
-
-## 9. Run Tests (Optional)
+Run tests:
 
 ```bash
 uv run pytest
