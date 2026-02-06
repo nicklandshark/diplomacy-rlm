@@ -18,7 +18,7 @@ from ..repl_sandbox import (
     build_sandbox_setup_code,
     conversation_policy,
 )
-from ..rlm_runtime import RLM
+from ..rlm_runtime import RLM, install_env_hook
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +77,7 @@ class ConversationAgent:
             verbose=config.verbose,
             persistent=True,
         )
+        install_env_hook(self.rlm, self._ensure_base_injection)
 
     def bootstrap(self) -> None:
         root_prompt = (

@@ -16,7 +16,9 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING)
+    logging.basicConfig(level=logging.WARNING)
+    if args.verbose:
+        logging.getLogger("rlm_diplomacy").setLevel(logging.INFO)
 
     config = GameConfig(game_dir=args.game_dir, max_year=args.max_year, verbose=args.verbose)
     orchestrator = Orchestrator(config)

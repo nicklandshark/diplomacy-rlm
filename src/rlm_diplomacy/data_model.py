@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -65,7 +66,10 @@ class GameConfig:
     # Model settings
     backend: str = "anthropic"
     backend_kwargs: dict = field(
-        default_factory=lambda: {"model_name": "claude-opus-4-6"}
+        default_factory=lambda: {
+            "model_name": "claude-opus-4-6",
+            "api_key": os.environ.get("ANTHROPIC_API_KEY", ""),
+        }
     )
     sub_backend: str | None = None
     sub_backend_kwargs: dict | None = None

@@ -9,10 +9,8 @@ To avoid stuffing the full game state into an ever-growing prompt (which degrade
 
 ```bash
 uv pip install -e .
-diplomacy-rlm --game-dir ./my_game --max-year 1910 --verbose
+uv run diplomacy-rlm --game-dir ./test_game --max-year 1910 --verbose # Requires `ANTHROPIC_API_KEY` to be set
 ```
-
-Requires the `rlm` package and an API key for your chosen backend. Without `rlm` installed, the system falls back to `FallbackRLM` with canned responses (useful for tests).
 
 ### Configuration
 

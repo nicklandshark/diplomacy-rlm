@@ -6,6 +6,7 @@ readme = "SPEC.md"
 requires-python = ">=3.11"
 dependencies = [
   "dill>=0.3.8",
+  "rlm @ git+https://github.com/alexzhang13/rlm.git",
 ]
 
 [project.scripts]

@@ -6,10 +6,11 @@ package is missing, a lightweight scripted fallback is provided.
 
 from __future__ import annotations
 
-import time
+import functools
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass(slots=True)
@@ -92,6 +93,67 @@ try:
 
     RLM = ExternalRLM
     RLMChatCompletion = ExternalRLMChatCompletion
+
+    # The RLM AnthropicClient doesn't pass stream or timeout to messages.create(),
+    # so the Anthropic SDK rejects non-streaming requests for models with low
+    # non-streaming token limits (e.g. Opus). Patch completion to pass an explicit
+    # timeout, which bypasses the SDK's client-side validation.
+    try:
+        import httpx
+        from rlm.clients.anthropic import AnthropicClient as _AC
+
+        _orig_completion = _AC.completion
+
+        def _patched_completion(self, prompt, model=None):
+            _orig_create = self.client.messages.create
+
+            def _create_with_timeout(**kwargs):
+                kwargs.setdefault("timeout", httpx.Timeout(timeout=600.0, connect=5.0))
+                return _orig_create(**kwargs)
+
+            self.client.messages.create = _create_with_timeout
+            try:
+                return _orig_completion(self, prompt, model)
+            finally:
+                self.client.messages.create = _orig_create
+
+        _AC.completion = _patched_completion
+    except Exception:
+        pass
+
 except Exception:  # pragma: no cover - exercised when external dependency is unavailable
     RLM = FallbackRLM
     RLMChatCompletion = FallbackRLMChatCompletion
+
+
+def install_env_hook(rlm_instance: Any, on_env_ready: Callable[[], None]) -> None:
+    """Ensure *on_env_ready* fires after the persistent environment is created
+    but before any agent code executes.
+
+    ``_persistent_env`` is ``None`` until the first ``completion()`` call
+    internally creates it, so callers cannot inject globals beforehand.
+    This wraps the RLM internals so the callback fires at the right moment.
+    """
+    if isinstance(rlm_instance, FallbackRLM):
+        orig_completion = rlm_instance.completion
+
+        @functools.wraps(orig_completion)
+        def _hooked_completion(prompt, root_prompt=None):
+            if rlm_instance.persistent:
+                rlm_instance._ensure_env()
+            on_env_ready()
+            return orig_completion(prompt, root_prompt=root_prompt)
+
+        rlm_instance.completion = _hooked_completion
+        return
+
+    if hasattr(rlm_instance, "_spawn_completion_context"):
+        orig_spawn = rlm_instance._spawn_completion_context
+
+        @contextmanager
+        def _hooked_spawn(prompt):
+            with orig_spawn(prompt) as ctx:
+                on_env_ready()
+                yield ctx
+
+        rlm_instance._spawn_completion_context = _hooked_spawn

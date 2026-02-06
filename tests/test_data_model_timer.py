@@ -51,7 +51,7 @@ def test_game_halt_error_is_exception() -> None:
 def test_game_config_defaults_and_factories() -> None:
     config = GameConfig()
     assert config.backend == "anthropic"
-    assert config.backend_kwargs["model_name"] == "claude-sonnet-4-5-20250929"
+    assert config.backend_kwargs["model_name"] == "claude-opus-4-6"
     assert config.strategize_timeout == 120.0
     assert config.converse_timeout == 180.0
     assert config.decide_timeout == 120.0

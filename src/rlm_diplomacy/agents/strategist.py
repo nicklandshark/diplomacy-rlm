@@ -18,7 +18,7 @@ from ..game_view import GameView
 from ..memory import MemoryManager
 from ..prompts import build_strategist_system_prompt
 from ..repl_sandbox import apply_sandbox_to_env, build_sandbox_setup_code, strategist_policy
-from ..rlm_runtime import RLM
+from ..rlm_runtime import RLM, install_env_hook
 from ..sentinels import (
     parse_spawn_completion,
     patched_rlm_parser,
@@ -58,6 +58,7 @@ class StrategistAgent:
             verbose=config.verbose,
             persistent=True,
         )
+        install_env_hook(self.rlm, self._ensure_base_injection)
 
     def bootstrap(self) -> None:
         phase = self.game_view.get_current_phase()

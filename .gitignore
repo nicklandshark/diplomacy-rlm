@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 .tmp/
 .pytest_cache/
-.eng-info
+**/*.egg-info
+
+# So you can run a test game without committing it
+test-game/
