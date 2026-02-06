@@ -135,6 +135,7 @@ class Orchestrator:
             },
         )
         try:
+            self._save_snapshot(self.game.get_current_phase())
             self._bootstrap_all()
 
             while not self.game.is_game_done:
@@ -164,10 +165,9 @@ class Orchestrator:
                 elif phase_type == "A":
                     self._run_adjustment_phase()
 
+                self._save_snapshot(phase)
                 self.game.process()
-
-                if phase_type == "M":
-                    self._save_snapshot(phase)
+                self._save_phase_results(phase)
 
                 self._log_event(
                     {
@@ -325,6 +325,7 @@ class Orchestrator:
             step="CONVERSE",
             payload={"step": "CONVERSE", "summary": f"agents={len(summaries)}"},
         )
+        self._save_snapshot(phase)  # intermediate: messages now visible
 
         self.events.emit(
             "step.start",
@@ -332,7 +333,7 @@ class Orchestrator:
             step="DECIDE",
             payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
         )
-        self._run_decide_step(phase, summaries, timed_out_strategize)
+        self._run_decide_step(phase, summaries)
         self.events.emit(
             "step.end",
             phase=phase,
@@ -349,6 +350,7 @@ class Orchestrator:
             payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
         )
         self._run_decide_only()
+        self._save_snapshot(phase)  # intermediate: orders now visible
         self.events.emit(
             "step.end",
             phase=phase,
@@ -365,6 +367,7 @@ class Orchestrator:
             payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
         )
         self._run_decide_only()
+        self._save_snapshot(phase)  # intermediate: orders now visible
         self.events.emit(
             "step.end",
             phase=phase,
@@ -547,7 +550,6 @@ class Orchestrator:
         self,
         phase: str,
         summaries_by_power: dict[str, list[ConversationSummary]],
-        strategize_timed_out: set[str],
     ) -> None:
         step_token = f"{phase}:DECIDE:{time.monotonic_ns()}"
         # Prepare unread context for powers that were not involved in any active conversations.
@@ -604,7 +606,7 @@ class Orchestrator:
                 applied = self._apply_default_orders(power)
             else:
                 orders = strategist.get_submitted_orders()
-                if power in timed_out or power in strategize_timed_out or orders is None:
+                if power in timed_out or orders is None:
                     applied = self._apply_default_orders(power)
                 else:
                     self.game.set_orders(power, orders)
@@ -943,6 +945,11 @@ class Orchestrator:
         return dill.dumps(state)
 
     def _save_snapshot(self, phase: str | None = None) -> None:
+        """Save a snapshot of game state, orders, messages, memory, and REPL state.
+
+        Called BEFORE game.process() so that orders are still present on the game object.
+        Results are written separately by _save_phase_results() after processing.
+        """
         if phase is None:
             phase = self.game.get_current_phase()
         snapshot_dir = self.snapshots_dir / phase
@@ -953,10 +960,6 @@ class Orchestrator:
 
         with (snapshot_dir / "orders.json").open("w", encoding="utf-8") as f:
             json.dump(self.game.get_orders(), f, indent=2, sort_keys=True)
-
-        results = self.game.result_history.last_value() if self.game.result_history else {}
-        with (snapshot_dir / "results.json").open("w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, sort_keys=True)
 
         messages = {
             ts: {
@@ -982,6 +985,21 @@ class Orchestrator:
         for power, strategist in self.strategists.items():
             with (repl_dir / f"{power}.dill").open("wb") as f:
                 f.write(self._snapshot_repl_state(strategist))
+
+        self.events.emit(
+            "snapshot.saved",
+            phase=phase,
+            payload={"phase": phase, "summary": f"snapshot saved for {phase}"},
+        )
+
+    def _save_phase_results(self, phase: str) -> None:
+        """Write results.json into an existing snapshot dir after game.process()."""
+        snapshot_dir = self.snapshots_dir / phase
+        if not snapshot_dir.exists():
+            return
+        results = self.game.result_history.last_value() if self.game.result_history else {}
+        with (snapshot_dir / "results.json").open("w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2, sort_keys=True)
 
     def _log_event(self, event: dict[str, Any]) -> None:
         with self.game_log_path.open("a", encoding="utf-8") as f:

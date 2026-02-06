@@ -1,0 +1,26 @@
+/* Territory influence colors */
+.austria { fill: #fce4d6 !important; }
+.england { fill: #e8d0f0 !important; }
+.france { fill: #d0e0f8 !important; }
+.germany { fill: #e8e0d0 !important; }
+.italy { fill: #d0f0d0 !important; }
+.russia { fill: #d8dce8 !important; }
+.turkey { fill: #f0eed0 !important; }
+.neutral { fill: #d8d8c8 !important; }
+.nopower { fill: #e2e2d2 !important; }
+
+/* Unit colors */
+.unitaustria { fill: #c48f85; stroke: black; stroke-width: 1; }
+.unitengland { fill: darkviolet; stroke: black; stroke-width: 1; }
+.unitfrance { fill: royalblue; stroke: black; stroke-width: 1; }
+.unitgermany { fill: #a08a75; stroke: black; stroke-width: 1; }
+.unititaly { fill: forestgreen; stroke: black; stroke-width: 1; }
+.unitrussia { fill: #757d91; stroke: black; stroke-width: 1; }
+.unitturkey { fill: #b9a61c; stroke: black; stroke-width: 1; }
+
+/* Order styles */
+.varwidthshadow { stroke: black; stroke-opacity: 0.4; fill: none; }
+.varwidthorder { fill: none; }
+.shadowdash { stroke: black; stroke-opacity: 0.4; stroke-dasharray: 8,4; fill: none; stroke-width: 10; }
+.supportorder { stroke-dasharray: 8,4; fill: none; stroke-width: 6; }
+.convoyorder { stroke-dasharray: 4,4; fill: none; stroke-width: 6; }

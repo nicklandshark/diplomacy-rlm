@@ -9,6 +9,7 @@ from .events import (
     PRIORITY_NORMAL,
     ObservableEvent,
 )
+from .tee import TeeEmitter
 
 __all__ = [
     "BufferedEventBus",
@@ -22,4 +23,5 @@ __all__ = [
     "PRIORITY_HIGH",
     "PRIORITY_NORMAL",
     "RecorderEmitter",
+    "TeeEmitter",
 ]

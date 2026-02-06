@@ -7,6 +7,10 @@ import importlib
 import json
 import logging
 import os
+import socket
+import subprocess
+import sys
+import threading
 from collections.abc import Sequence
 from typing import Any
 
@@ -186,6 +190,18 @@ def _apply_anthropic_defaults(kwargs: dict[str, Any]) -> None:
         kwargs["model_name"] = "claude-opus-4-6"
 
 
+def _find_open_port(start: int = 3100) -> int:
+    """Find an open port starting from start."""
+    for port in range(start, start + 100):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError("Could not find an open port")
+
+
 def _ensure_modal_installed() -> None:
     importlib.import_module("modal")
 
@@ -310,6 +326,17 @@ def main(argv: Sequence[str] | None = None) -> None:
         action="store_true",
         help="Include memory unified diffs in emitted console events.",
     )
+    parser.add_argument(
+        "--serve-web",
+        action="store_true",
+        help="Start a web viewer for the game.",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=0,
+        help="Port for the web viewer (0 = auto-find).",
+    )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -411,13 +438,74 @@ def main(argv: Sequence[str] | None = None) -> None:
     except (ImportError, ValueError) as exc:
         parser.error(str(exc))
 
-    emitter = ConsoleEventLogger() if args.log_events else NoopEmitter()
+    web_process = None
+    if args.serve_web:
+        from .observability import BufferedEventBus, TeeEmitter
+        from .observability.api import app as api_app
+        from .observability.api import configure as configure_api
+
+        # Set up event bus for SSE
+        sse_bus = BufferedEventBus()
+
+        # Create tee emitter: sends to both console logger (if enabled) and SSE bus
+        if args.log_events:
+            emitter = TeeEmitter(ConsoleEventLogger(), sse_bus)
+        else:
+            emitter = TeeEmitter(sse_bus)
+
+        # Find ports
+        api_port = _find_open_port(3100)
+        web_port = args.web_port if args.web_port else _find_open_port(api_port + 1)
+
+        # Configure and start the FastAPI SSE server
+        game_id = os.path.basename(os.path.abspath(args.game_dir))
+        configure_api(sse_bus, game_id=game_id, game_dir=os.path.abspath(args.game_dir))
+
+        import uvicorn
+
+        def _run_api() -> None:
+            uvicorn.run(api_app, host="127.0.0.1", port=api_port, log_level="warning")
+
+        api_thread = threading.Thread(target=_run_api, daemon=True)
+        api_thread.start()
+
+        # Start NextJS dev server
+        web_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "web"
+        )
+        if not os.path.isdir(web_dir):
+            # Try relative to cwd
+            web_dir = os.path.join(os.getcwd(), "web")
+
+        if os.path.isdir(web_dir):
+            web_env = {
+                **os.environ,
+                "GAMES_DIR": os.path.dirname(os.path.abspath(args.game_dir)),
+                "LIVE_API_URL": f"http://127.0.0.1:{api_port}",
+                "PORT": str(web_port),
+            }
+            web_process = subprocess.Popen(
+                ["bun", "run", "dev", "--port", str(web_port)],
+                cwd=web_dir,
+                env=web_env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            print(f"\nGame viewer: http://localhost:{web_port}/game/{game_id}\n")
+        else:
+            print(f"\nWarning: web/ directory not found, skipping web viewer.\n")
+            print(f"SSE API available at: http://127.0.0.1:{api_port}\n")
+    else:
+        emitter = ConsoleEventLogger() if args.log_events else NoopEmitter()
 
     orchestrator = Orchestrator(config, event_emitter=emitter)
     try:
         orchestrator.run()
     finally:
         emitter.close()
+        if web_process is not None:
+            web_process.terminate()
+            web_process.wait(timeout=5)
 
 
 if __name__ == "__main__":

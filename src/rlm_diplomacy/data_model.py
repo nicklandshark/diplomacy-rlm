@@ -116,9 +116,9 @@ class GameConfig:
     power_backend_kwargs_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # Timeouts
-    strategize_timeout: float = 120.0
-    converse_timeout: float = 180.0
-    decide_timeout: float = 120.0
+    strategize_timeout: float = 300.0
+    converse_timeout: float = 360.0
+    decide_timeout: float = 300.0
     converse_max_rounds: int = 5
     target_response_timeout: float = 60.0
 
