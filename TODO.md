@@ -1,0 +1,23 @@
+# TODO
+
+- [x] Read `SPEC.md` and `tests/TESTS.md`.
+- [x] Initialize project with `uv` and configure package layout.
+- [x] Vendor diplomacy engine under `src/rlm_diplomacy/_vendor/diplomacy`.
+- [x] Apply required vendor patches (`__init__.py`, `utils/__init__.py`, `utils/common.py`, `utils/jsonable.py`, `utils/export.py`).
+- [x] Implement shared data model (`ALL_POWERS`, dataclasses, config, exceptions).
+- [x] Implement `GameView` and `FilteredGameView` (read-only + visibility filtering).
+- [x] Implement `MemoryManager`.
+- [x] Implement `PhaseTimer`.
+- [x] Implement `MessageRouter`.
+- [x] Implement sentinel parsing (`FINAL`, `FINAL_VAR`, `SPAWN_CONVERSATION`) and parser patching helpers.
+- [x] Implement `StrategistAgent` lifecycle and order submission contract.
+- [x] Implement `ConversationAgent` lifecycle and outbox messaging.
+- [x] Implement `Orchestrator` game loop, movement/retreat/adjustment flow, defaults, retries, logging, snapshots.
+- [x] Add CLI entry point.
+- [x] Write tests guided by `tests/TESTS.md`.
+- [x] Run `uv run pytest`, investigate failures, and iterate.
+- [x] Harden REPL sandbox with path-restricted `open()` and module blocklist wrappers.
+- [x] Re-inject sandbox wrappers before every strategist/conversation completion retry.
+- [x] Install trusted REPL `setup_code` so first completion turn is sandboxed.
+- [x] Add sandbox security tests (`tests/test_repl_sandbox.py`) for open/import restrictions and reinjection.
+- [x] Produce implementation summary and test report.

@@ -1,0 +1,2 @@
+[console_scripts]
+diplomacy-rlm = rlm_diplomacy.cli:main
