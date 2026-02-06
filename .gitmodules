@@ -1,0 +1,9 @@
+[submodule ".tmp/AI_Diplomacy"]
+	path = .tmp/AI_Diplomacy
+	url = https://github.com/GoodStartLabs/AI_Diplomacy.git
+[submodule ".tmp/diplomacy"]
+	path = .tmp/diplomacy
+	url = https://github.com/diplomacy/diplomacy
+[submodule ".tmp/rlm"]
+	path = .tmp/rlm
+	url = https://github.com/alexzhang13/rlm.git
