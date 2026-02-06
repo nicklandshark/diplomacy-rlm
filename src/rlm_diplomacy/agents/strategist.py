@@ -73,6 +73,8 @@ class StrategistAgent:
         self._modal_incoming_decision: dict[str, Any] | None = None
         self._modal_memory_path = f"/tmp/{self.power_name}_memory.md"
         self._completion_lock = threading.Lock()
+        self._active_step_token: str | None = None
+        self._step_token_guard_enabled = False
 
         blocked = set(config.blocked_modules) if config.blocked_modules is not None else None
         policy_memory_path = self._modal_memory_path if self._is_modal else self.memory_path
@@ -163,6 +165,14 @@ class StrategistAgent:
         else:
             env.globals.pop("submit_orders", None)
 
+    def activate_step_token(self, token: str) -> None:
+        self._step_token_guard_enabled = True
+        self._active_step_token = str(token)
+
+    def invalidate_step_token(self, token: str) -> None:
+        if self._active_step_token == str(token):
+            self._active_step_token = None
+
     def strategize(self, phase: str) -> None:
         self._events.emit(
             "agent.status",
@@ -183,12 +193,14 @@ class StrategistAgent:
             "or FINAL(done) if skipping negotiation."
         )
 
+        step_token = self._active_step_token
         deadline_fn = self._time_remaining_fn
         with patched_rlm_parser():
             result = self._run_completion_with_retries(
                 "",
                 root_prompt,
                 deadline_fn=deadline_fn,
+                step_token=step_token,
             )
         if result is None:
             self._events.emit(
@@ -198,6 +210,8 @@ class StrategistAgent:
                 step="STRATEGIZE",
                 payload={"status": "TIMEOUT", "role": "STRATEGIST", "step": "STRATEGIZE"},
             )
+            return
+        if not self._is_step_token_active(step_token):
             return
 
         response = result.response if result is not None else ""
@@ -259,6 +273,7 @@ class StrategistAgent:
         )
         self._submitted_orders = None
 
+        step_token = self._active_step_token
         deadline_fn = self._time_remaining_fn
         root_prompt = (
             f"Phase: {phase}. DECIDE step. You have {self._time_left_for_prompt()}s remaining. "
@@ -269,6 +284,7 @@ class StrategistAgent:
             "",
             root_prompt,
             deadline_fn=deadline_fn,
+            step_token=step_token,
         )
         if result is None:
             self._events.emit(
@@ -278,6 +294,8 @@ class StrategistAgent:
                 step="DECIDE",
                 payload={"status": "TIMEOUT", "role": "STRATEGIST", "step": "DECIDE"},
             )
+            return
+        if not self._is_step_token_active(step_token):
             return
         self._events.emit(
             "agent.status",
@@ -383,6 +401,7 @@ class StrategistAgent:
         prompt: str,
         root_prompt: str,
         deadline_fn: Callable[[], float] | None = None,
+        step_token: str | None = None,
     ):
         if not self._acquire_completion_slot(deadline_fn):
             return None
@@ -390,6 +409,8 @@ class StrategistAgent:
         max_retries = self.config.max_retries
         try:
             for attempt in range(max_retries):
+                if not self._is_step_token_active(step_token):
+                    return None
                 if self._step_deadline_exceeded(deadline_fn):
                     return None
                 try:
@@ -417,7 +438,7 @@ class StrategistAgent:
                     result = self.rlm.completion(prompt, root_prompt=root_prompt)
                     after_text = self._memory_text_or_empty()
 
-                    if self._step_deadline_exceeded(deadline_fn):
+                    if self._step_deadline_exceeded(deadline_fn) or not self._is_step_token_active(step_token):
                         if after_text != before_text:
                             try:
                                 Path(self.memory_path).write_text(before_text, encoding="utf-8")
@@ -549,6 +570,9 @@ class StrategistAgent:
             }
 
     def _submit_orders(self, orders: list[str]) -> str:
+        if self._step_token_guard_enabled:
+            if self._active_step_token is None or self._step_deadline_exceeded():
+                return "Error: submit_orders unavailable after timeout."
         if self._submitted_orders is not None:
             return "Error: orders already submitted. First submission is final."
 
@@ -650,6 +674,11 @@ class StrategistAgent:
             return float(active_deadline()) <= 0.0
         except Exception:
             return False
+
+    def _is_step_token_active(self, token: str | None) -> bool:
+        if token is None:
+            return True
+        return self._active_step_token == token
 
     def _acquire_completion_slot(self, deadline_fn: Callable[[], float] | None = None) -> bool:
         active_deadline = deadline_fn or self._time_remaining_fn

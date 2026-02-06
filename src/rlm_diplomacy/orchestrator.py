@@ -343,6 +343,7 @@ class Orchestrator:
 
     def _run_strategize_step(self, phase: str) -> tuple[dict[str, ConversationRequest], set[str]]:
         timer = PhaseTimer(self.config.strategize_timeout)
+        step_token = f"{phase}:STRATEGIZE:{time.monotonic_ns()}"
 
         active_strategists = list(self._active_controlled_strategists())
         if not active_strategists:
@@ -358,6 +359,7 @@ class Orchestrator:
         pool = _DaemonThreadPoolExecutor(max_workers=len(active_strategists))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
             strategist.inject(timer, include_submit_orders=False)
             futures[pool.submit(strategist.strategize, phase)] = power
 
@@ -368,6 +370,11 @@ class Orchestrator:
         )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
         if timed_out:
             self.events.emit(
                 "step.timeout",
@@ -389,6 +396,7 @@ class Orchestrator:
                 objectives = self._sanitize_objectives(power, req.objectives)
                 if objectives:
                     requests[power] = ConversationRequest(power=power, objectives=objectives)
+            strategist.invalidate_step_token(step_token)
 
         self._log_event(
             {
@@ -440,6 +448,7 @@ class Orchestrator:
 
         while active and not timer.expired and round_num < self.config.converse_max_rounds:
             round_num += 1
+            round_token = f"{phase}:CONVERSE:{round_num}:{time.monotonic_ns()}"
             self.events.emit(
                 "conversation.round.tick",
                 phase=phase,
@@ -448,14 +457,22 @@ class Orchestrator:
             )
 
             pool = _DaemonThreadPoolExecutor(max_workers=len(active))
-            futures = {pool.submit(agent.run_round, round_num): agent for agent in active}
+            futures = {}
+            for agent in active:
+                agent.activate_round_token(round_token)
+                futures[pool.submit(agent.run_round, round_num)] = agent
             _, not_done = self._wait_for_futures(
                 pool,
                 futures,
                 timeout=timer.remaining(),
             )
             for future in not_done:
+                futures[future].invalidate_round_token(round_token)
                 futures[future].force_finish()
+            for future, agent in futures.items():
+                if future in not_done:
+                    continue
+                agent.invalidate_round_token(round_token)
 
             flushed = self.router.flush()
             messages_sent += len(flushed)
@@ -501,6 +518,7 @@ class Orchestrator:
         summaries_by_power: dict[str, list[ConversationSummary]],
         strategize_timed_out: set[str],
     ) -> None:
+        step_token = f"{phase}:DECIDE:{time.monotonic_ns()}"
         # Prepare unread context for powers that were not involved in any active conversations.
         involved_powers: set[str] = set()
         for power, summaries in summaries_by_power.items():
@@ -520,6 +538,7 @@ class Orchestrator:
         pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
             strategist.inject(timer, include_submit_orders=True)
             futures[pool.submit(strategist.decide, phase)] = power
 
@@ -530,6 +549,11 @@ class Orchestrator:
         )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
         if timed_out:
             self.events.emit(
                 "step.timeout",
@@ -555,6 +579,8 @@ class Orchestrator:
                     self.game.set_orders(power, orders)
                     applied = list(orders)
             order_counts[power] = len(applied)
+        for _, strategist in active_strategists:
+            strategist.invalidate_step_token(step_token)
 
         self._log_event(
             {
@@ -567,11 +593,13 @@ class Orchestrator:
     def _run_decide_only(self) -> None:
         phase = self.game.get_current_phase()
         timer = PhaseTimer(self.config.decide_timeout)
+        step_token = f"{phase}:DECIDE_ONLY:{time.monotonic_ns()}"
 
         active_strategists = list(self._active_controlled_strategists())
         pool = _DaemonThreadPoolExecutor(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
         for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
             strategist.inject(timer, include_submit_orders=True)
             futures[pool.submit(strategist.decide, phase)] = power
 
@@ -582,6 +610,11 @@ class Orchestrator:
         )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
         if timed_out:
             self.events.emit(
                 "step.timeout",
@@ -607,6 +640,8 @@ class Orchestrator:
                     self.game.set_orders(power, orders)
                     applied = list(orders)
             order_counts[power] = len(applied)
+        for _, strategist in active_strategists:
+            strategist.invalidate_step_token(step_token)
 
         self._log_event({"phase": phase, "event": "decide_complete", "orders": order_counts})
 

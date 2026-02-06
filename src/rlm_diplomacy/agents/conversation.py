@@ -72,6 +72,8 @@ class ConversationAgent:
         self._is_modal = config.environment == "modal"
         self._time_remaining_fn: Callable[[], float] | None = None
         self._modal_outbox: list[dict[str, str]] = []
+        self._active_round_token: str | None = None
+        self._round_token_guard_enabled = False
 
         blocked = set(config.blocked_modules) if config.blocked_modules is not None else None
         self._sandbox_policy = conversation_policy(blocked_modules=blocked)
@@ -162,6 +164,9 @@ class ConversationAgent:
     def run_round(self, round_num: int) -> None:
         if self._finished:
             return
+        round_token = self._active_round_token
+        if not self._is_round_token_active(round_token):
+            return
 
         self._events.emit(
             "conversation.round.start",
@@ -175,6 +180,8 @@ class ConversationAgent:
         root_prompt = self._build_round_prompt(round_num)
         result = self._run_completion_with_retries("", root_prompt)
         if result is None:
+            return
+        if not self._is_round_token_active(round_token):
             return
 
         if self._is_modal and self._modal_outbox:
@@ -195,6 +202,8 @@ class ConversationAgent:
                 payload={"text": response, "summary": response},
             )
         if summary is not None:
+            if not self._is_round_token_active(round_token):
+                return
             self._summary = summary
             self._finished = True
             self._events.emit(
@@ -270,6 +279,14 @@ class ConversationAgent:
             payload={"status": "TIMEOUT", "role": "CONVERSATION", "step": "CONVERSE"},
         )
 
+    def activate_round_token(self, token: str) -> None:
+        self._round_token_guard_enabled = True
+        self._active_round_token = str(token)
+
+    def invalidate_round_token(self, token: str) -> None:
+        if self._active_round_token == str(token):
+            self._active_round_token = None
+
     def get_summary(self) -> ConversationSummary:
         return ConversationSummary(
             power=self.power_name,
@@ -290,6 +307,14 @@ class ConversationAgent:
             self.rlm._persistent_env = None
 
     def _send_message(self, recipient: str, content: str) -> str:
+        if self._finished or not self._is_round_token_active(self._active_round_token):
+            return "Error: conversation round already ended."
+        if self._time_remaining_fn is not None:
+            try:
+                if float(self._time_remaining_fn()) <= 0.0:
+                    return "Error: conversation round timed out."
+            except Exception:
+                return "Error: conversation round timed out."
         recipient = recipient.upper()
         if recipient != GLOBAL and recipient not in self._valid_powers:
             return f"Error: invalid recipient {recipient}."
@@ -319,6 +344,13 @@ class ConversationAgent:
             },
         )
         return f"Queued message to {recipient}."
+
+    def _is_round_token_active(self, token: str | None) -> bool:
+        if not self._round_token_guard_enabled:
+            return True
+        if token is None:
+            return False
+        return token == self._active_round_token
 
     def _run_completion_with_retries(self, prompt: str, root_prompt: str):
         max_retries = self.config.max_retries

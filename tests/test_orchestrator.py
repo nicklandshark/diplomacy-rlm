@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from rlm_diplomacy.agents.strategist import StrategistAgent
-from rlm_diplomacy.data_model import GameConfig
+from rlm_diplomacy.data_model import ConversationRequest, GameConfig
 from rlm_diplomacy.orchestrator import Orchestrator
 
 
@@ -114,3 +114,65 @@ def test_strategize_timeout_does_not_block_phase_progression(
     assert requests == {}
     assert timed_out == {"FRANCE", "GERMANY"}
     assert elapsed < 0.2
+
+
+def test_decide_timeout_drops_late_submit_orders_side_effects(
+    patched_agent_rlm,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        decide_timeout=0.01,
+        max_retries=1,
+    )
+    orchestrator = Orchestrator(config)
+
+    def _slow_decide(self, phase: str) -> None:
+        _ = phase
+        time.sleep(0.05)
+        self._submit_orders(["A PAR - XYZ"])
+
+    monkeypatch.setattr(StrategistAgent, "decide", _slow_decide)
+
+    orchestrator._run_decide_step("S1901M", summaries_by_power={}, strategize_timed_out=set())
+    time.sleep(0.1)
+    assert orchestrator.strategists["FRANCE"].get_submitted_orders() is None
+    assert orchestrator.strategists["GERMANY"].get_submitted_orders() is None
+
+
+def test_converse_timeout_drops_late_send_message_side_effects(
+    patched_agent_rlm,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        converse_timeout=0.01,
+        converse_max_rounds=1,
+        max_retries=1,
+    )
+    orchestrator = Orchestrator(config)
+
+    def _slow_round(self, round_num: int) -> None:
+        _ = round_num
+        time.sleep(0.05)
+        self._send_message("GERMANY", "late message")
+
+    monkeypatch.setattr(ConversationAgent, "run_round", _slow_round)
+
+    orchestrator._run_converse_step(
+        "S1901M",
+        requests={
+            "FRANCE": ConversationRequest(
+                power="FRANCE",
+                objectives={"GERMANY": "ally"},
+            )
+        },
+    )
+    time.sleep(0.1)
+    assert orchestrator.router.flush() == []
