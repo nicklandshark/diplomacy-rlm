@@ -8,7 +8,7 @@ dependencies = [
   "dill>=0.3.8",
   "openai>=2.17.0",
   "rich>=13.7.0",
-  "rlm @ git+https://github.com/alexzhang13/rlm.git",
+  "rlm @ git+https://github.com/alexzhang13/rlm.git@7436fcfd6d0283fb636808d2e5b06b881e64591a",
 ]
 
 [project.optional-dependencies]

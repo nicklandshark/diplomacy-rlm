@@ -32,8 +32,10 @@ uv run diplomacy-rlm \
   --game-dir ./test_game \
   --powers FRANCE,GERMANY,ITALY \
   --backend anthropic \
-  --model claude-sonnet-4-5 \
+  --backend-arg-for anthropic.model_name=claude-sonnet-4-5 \
+  --backend-arg-for anthropic.api_key=$ANTHROPIC_API_KEY \
   --power-backend FRANCE=openai \
+  --backend-arg-for openai.api_key=$OPENAI_API_KEY \
   --power-model FRANCE=gpt-4.1-mini \
   --power-model GERMANY=claude-opus-4-6 \
   --power-model ITALY=claude-3-5-haiku-latest
@@ -77,8 +79,11 @@ CLI validation rules:
 - `--power-model` power must be present in `--powers`.
 - `--power-backend` must use `POWER=BACKEND` format.
 - `--power-backend` power must be present in `--powers`.
-- A base model (`--model`) or per-power models (`--power-model`) must cover all selected powers.
+- `--backend-arg-for` must use `BACKEND.KEY=VALUE` format.
+- `--power-backend-arg` must use `POWER.KEY=VALUE` format, and `POWER` must be present in `--powers`.
+- Resolved backend kwargs must provide `model_name` for every selected power (via `--model`, `--backend-arg`, `--backend-arg-for`, or `--power-model`).
 - `--log-prompts`, `--log-repl`, `--log-messages`, and `--log-memory-diff` require `--log-events`.
+- Timeout behavior is best-effort: timed-out calls are ignored for game-impacting side effects, but in-flight model calls are not forcibly cancelled.
 
 ### Configuration
 
@@ -87,10 +92,12 @@ All settings live in `GameConfig` (`data_model.py`):
 | Field | Default | Description |
 |---|---|---|
 | `backend` | `"anthropic"` | LLM backend for the RLM |
-| `backend_kwargs` | `{"model_name": "claude-opus-4-6", "api_key": ...}` | Base model parameters for all powers |
+| `backend_kwargs` | `{"model_name": "claude-opus-4-6", "api_key": ...}` | Base backend kwargs for powers using `backend` |
 | `sub_backend` | `None` | Optional secondary backend for `llm_query()` calls |
 | `power_model_overrides` | `{}` | Optional per-power `model_name` override (e.g. `{"FRANCE": "..."}`) |
 | `power_backend_overrides` | `{}` | Optional per-power backend override (e.g. `{"FRANCE": "openai"}`) |
+| `backend_kwargs_by_backend` | `{}` | Backend-specific kwargs map (e.g. `{"openai": {"api_key": "..."}}`) |
+| `power_backend_kwargs_overrides` | `{}` | Per-power kwargs map merged last (e.g. `{"FRANCE": {"api_key": "..."}}`) |
 | `environment` | `"local"` | RLM sandbox (`local` or `modal`) |
 | `environment_kwargs` | `{}` | Extra environment args (e.g. Modal `app_name`, `timeout`) |
 | `observe_prompts` | `False` | Include raw prompts in observability events (console logs) |
@@ -141,6 +148,8 @@ pytest
 
 Tests use `FallbackRLM` -- no API keys needed.
 
+Python support policy: the project targets the newest stable CPython release while preserving compatibility with currently supported lower versions (`>=3.11`).
+
 ---
 
 # Architecture
@@ -174,7 +183,7 @@ Every movement phase runs a 3-step loop. Retreat and adjustment phases skip stra
   game.process() -> adjudicate -> next phase
 ```
 
-All agents/Powers run in parallel via `ThreadPoolExecutor`. Timed-out agents receive safe default orders (hold/disband/waive).
+Agents run in parallel via pooled worker threads. Timeout handling is best-effort: timed-out powers receive safe default orders (hold/disband/waive), and late model outputs are ignored for game-impacting side effects.
 
 ## What Agents/Powers Can See and Do
 
@@ -203,8 +212,8 @@ All agents/Powers run in parallel via `ThreadPoolExecutor`. Timed-out agents rec
 | Module | Purpose |
 |---|---|
 | `orchestrator.py` | Main game loop. Runs controlled powers in parallel, handles movement/retreat/adjustment flow, applies timeout-safe defaults, writes snapshots/logs, restores from snapshots, and emits structured observability events. Entry point: `Orchestrator(config).run()`. |
-| `data_model.py` | Shared types and validated `GameConfig`: power subset normalization (min 2), supported backend/environment validation, per-power model/backend overrides, and backend resolution helpers. |
-| `cli.py` | CLI entry point (`diplomacy-rlm`). Parses powers, per-power model/backend overrides, backend/sub-backend args, sandbox args (`local`/`modal`), console log flags, and builds `GameConfig`. |
+| `data_model.py` | Shared types and validated `GameConfig`: power subset normalization (min 2), supported backend/environment validation, per-power model/backend overrides, backend-scoped kwargs, and backend resolution helpers. |
+| `cli.py` | CLI entry point (`diplomacy-rlm`). Parses powers, per-power model/backend overrides, backend-scoped and power-scoped backend args, sandbox args (`local`/`modal`), console log flags, and builds `GameConfig`. |
 | `__init__.py` | Public package exports for orchestrator, agents, data model types, timer, memory/router utilities, and observability primitives. |
 
 ### Agents/Powers

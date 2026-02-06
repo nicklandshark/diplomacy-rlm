@@ -494,7 +494,7 @@ requires-dist = [
     { name = "modal", marker = "extra == 'modal'", specifier = ">=0.74.0" },
     { name = "openai", specifier = ">=2.17.0" },
     { name = "rich", specifier = ">=13.7.0" },
-    { name = "rlm", git = "https://github.com/alexzhang13/rlm.git" },
+    { name = "rlm", git = "https://github.com/alexzhang13/rlm.git?rev=7436fcfd6d0283fb636808d2e5b06b881e64591a" },
 ]
 provides-extras = ["modal"]
 
@@ -1390,7 +1390,7 @@ wheels = [
 [[package]]
 name = "rlm"
 version = "0.1.0"
-source = { git = "https://github.com/alexzhang13/rlm.git#7436fcfd6d0283fb636808d2e5b06b881e64591a" }
+source = { git = "https://github.com/alexzhang13/rlm.git?rev=7436fcfd6d0283fb636808d2e5b06b881e64591a#7436fcfd6d0283fb636808d2e5b06b881e64591a" }
 dependencies = [
     { name = "anthropic" },
     { name = "google-genai" },
