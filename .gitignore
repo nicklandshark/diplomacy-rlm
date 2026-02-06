@@ -6,4 +6,4 @@ __pycache__/
 **/*.egg-info
 
 # So you can run a test game without committing it
-test-game/
+test_game_outputs/

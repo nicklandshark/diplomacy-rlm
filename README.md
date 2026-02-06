@@ -16,7 +16,7 @@ Run with a subset of powers and per-power model overrides:
 
 ```bash
 uv run diplomacy-rlm \
-  --game-dir ./test_game \
+  --game-dir ./test_game_outputs/claude_game \
   --max-year 1905 \
   --powers FRANCE,GERMANY,ITALY \
   --power-model FRANCE=claude-opus-4-6 \
