@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from rlm_diplomacy.data_model import GameConfig
 from rlm_diplomacy.game_view import GameView
@@ -113,3 +114,256 @@ def test_conversation_add_target_idempotent(
     agent.add_target("GERMANY", "probe")
     assert agent.targets.count("GERMANY") == 1
     assert agent.objectives["GERMANY"] == "probe"
+
+
+def test_strategist_discards_late_completion_side_effects(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    memory.initialize_all(["FRANCE", "GERMANY"])
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        max_retries=1,
+    )
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    strategist.rlm.queue_response("done")
+    strategist.bootstrap()
+
+    memory_path = Path(strategist.memory_path)
+    before_text = memory_path.read_text(encoding="utf-8")
+    strategist._submitted_orders = ["A PAR H"]
+
+    ticks = {"count": 0}
+
+    def remaining() -> float:
+        ticks["count"] += 1
+        if ticks["count"] < 3:
+            return 1.0
+        return -1.0
+
+    strategist._time_remaining_fn = remaining
+
+    def fake_completion(prompt: str, root_prompt: str | None = None):
+        _ = (prompt, root_prompt)
+        memory_path.write_text(before_text + "\nLATE_WRITE", encoding="utf-8")
+        return SimpleNamespace(response="done")
+
+    strategist.rlm.completion = fake_completion
+
+    result = strategist._run_completion_with_retries("", "prompt")
+    assert result is None
+    assert strategist._submitted_orders is None
+    assert memory_path.read_text(encoding="utf-8") == before_text
+
+
+def test_power_model_overrides_are_applied_per_power(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        power_model_overrides={
+            "FRANCE": "model-fr",
+            "GERMANY": "model-ge",
+        },
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    france = StrategistAgent("FRANCE", fresh_game, memory, config)
+    germany = StrategistAgent("GERMANY", fresh_game, memory, config)
+
+    assert france.rlm.backend_kwargs["model_name"] == "model-fr"
+    assert germany.rlm.backend_kwargs["model_name"] == "model-ge"
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="FRANCE",
+        targets=["GERMANY"],
+        objectives={"GERMANY": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.backend_kwargs["model_name"] == "model-fr"
+
+
+def test_power_backend_overrides_are_applied_per_power(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        backend="anthropic",
+        power_backend_overrides={
+            "FRANCE": "openai",
+            "GERMANY": "anthropic",
+        },
+        power_model_overrides={
+            "FRANCE": "gpt-4.1-mini",
+            "GERMANY": "claude-sonnet-4-5",
+        },
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    france = StrategistAgent("FRANCE", fresh_game, memory, config)
+    germany = StrategistAgent("GERMANY", fresh_game, memory, config)
+    assert france.rlm.backend == "openai"
+    assert germany.rlm.backend == "anthropic"
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="FRANCE",
+        targets=["GERMANY"],
+        objectives={"GERMANY": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.backend == "openai"
+
+
+def test_agents_pass_environment_configuration_to_rlm(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        environment_kwargs={"app_name": "diplomacy-tests", "timeout": 900},
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    assert strategist.rlm.environment == "modal"
+    assert strategist.rlm.persistent is False
+    assert strategist.rlm.environment_kwargs["app_name"] == "diplomacy-tests"
+    assert strategist.rlm.environment_kwargs["timeout"] == 900
+    assert "setup_code" in strategist.rlm.environment_kwargs
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="GERMANY",
+        targets=["FRANCE"],
+        objectives={"FRANCE": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.environment == "modal"
+    assert convo.rlm.persistent is False
+    assert convo.rlm.environment_kwargs["app_name"] == "diplomacy-tests"
+
+
+def test_strategist_modal_export_failure_does_not_wipe_memory(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    from rlm_diplomacy.agents import strategist as strategist_module
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    class _DummyEnv:
+        def execute_code(self, _code: str) -> None:
+            return None
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    memory_path = Path(strategist.memory_path)
+    memory_path.write_text("KEEP_ME", encoding="utf-8")
+
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": "", "memory_ok": False},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "KEEP_ME"
+
+    # Backward-compat legacy payload with empty memory_text should also avoid wipe.
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": ""},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "KEEP_ME"
+
+
+def test_strategist_modal_export_success_updates_memory(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+    monkeypatch,
+) -> None:
+    from rlm_diplomacy.agents import strategist as strategist_module
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    class _DummyEnv:
+        def execute_code(self, _code: str) -> None:
+            return None
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    memory_path = Path(strategist.memory_path)
+    memory_path.write_text("OLD", encoding="utf-8")
+
+    monkeypatch.setattr(
+        strategist_module,
+        "export_state",
+        lambda _env: {"memory_text": "NEW", "memory_ok": True},
+    )
+    strategist._capture_modal_env_outputs(_DummyEnv())
+    assert memory_path.read_text(encoding="utf-8") == "NEW"

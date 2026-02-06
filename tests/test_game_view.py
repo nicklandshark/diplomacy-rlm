@@ -85,3 +85,15 @@ def test_map_access_and_abuts(fresh_game) -> None:
     view = GameView(fresh_game, "FRANCE")
     assert bool(view.map.abuts("A", "PAR", "-", "BUR")) is True
     assert bool(view.map.abuts("A", "PAR", "-", "LON")) is False
+
+
+def test_visible_powers_filtering(fresh_game) -> None:
+    view = GameView(fresh_game, "FRANCE", visible_powers=["FRANCE", "GERMANY"])
+    units = view.get_units()
+    centers = view.get_centers()
+    powers = view.powers
+    assert set(units.keys()) == {"FRANCE", "GERMANY"}
+    assert set(centers.keys()) == {"FRANCE", "GERMANY"}
+    assert set(powers.keys()) == {"FRANCE", "GERMANY"}
+    assert view.get_units("ITALY") == []
+    assert view.get_centers("ITALY") == []

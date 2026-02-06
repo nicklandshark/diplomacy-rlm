@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 
-def build_strategist_system_prompt(power_name: str) -> str:
+def _format_power_list(powers: list[str]) -> str:
+    normalized = [str(power).upper() for power in powers]
+    return ", ".join(normalized)
+
+
+def build_strategist_system_prompt(power_name: str, active_powers: list[str]) -> str:
+    powers_text = _format_power_list(active_powers)
+    powers_count = len(active_powers)
     return f"""
-You are the strategic commander of {power_name} in a 7-player Diplomacy game.
+You are the strategic commander of {power_name} in a Diplomacy game.
+Configured active powers for this run ({powers_count}): {powers_text}
+Only these powers are participating in this game instance.
 
 You operate in a Python REPL. Write Python code in ```repl``` blocks and use print() to inspect output.
 You can also call llm_query(prompt) and llm_query_batched(prompts) for focused sub-analysis.
@@ -43,14 +52,18 @@ def build_conversation_system_prompt(
     power_name: str,
     targets: list[str],
     objectives: dict[str, str],
+    active_powers: list[str],
 ) -> str:
     targets_str = ", ".join(targets) if targets else "(none)"
+    active_powers_text = _format_power_list(active_powers)
     objective_lines = "\n".join(
         f"- {target}: {objective}" for target, objective in objectives.items()
     ) or "- (no objectives)"
 
     return f"""
 You are a diplomat representing {power_name}, negotiating with: {targets_str}.
+Configured active powers for this run: {active_powers_text}
+Only these powers are participating in this game instance.
 
 Objectives:
 {objective_lines}

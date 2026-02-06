@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import shutil
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed, wait
 from pathlib import Path
 from typing import Any
 
@@ -17,19 +17,84 @@ from rlm_diplomacy._vendor.diplomacy import Game
 from rlm_diplomacy._vendor.diplomacy.engine.message import GLOBAL
 
 from .agents import ConversationAgent, StrategistAgent
-from .data_model import ALL_POWERS, ConversationRequest, ConversationSummary, GameConfig, GameHaltError
+from .data_model import ConversationRequest, ConversationSummary, GameConfig, GameHaltError
 from .memory import MemoryManager
 from .message_router import MessageRouter
+from .observability import EventEmitter, NoopEmitter
+from .observability.events import PRIORITY_HIGH, PRIORITY_NORMAL
 from .timer import PhaseTimer
 
 logger = logging.getLogger(__name__)
 
 
+class _BestEffortDaemonPool:
+    """Small daemon-thread pool with public-API futures only.
+
+    Timed-out tasks are best-effort: the caller can stop waiting while daemon
+    threads continue in the background, so process shutdown is not blocked.
+    """
+
+    def __init__(self, max_workers: int, thread_name_prefix: str = "orchestrator"):
+        self._max_workers = max(1, int(max_workers))
+        self._thread_name_prefix = thread_name_prefix
+        self._lock = threading.Lock()
+        self._shutdown = False
+        self._active_threads: set[threading.Thread] = set()
+        self._next_id = 0
+
+    def submit(self, fn, *args, **kwargs) -> Future:
+        with self._lock:
+            if self._shutdown:
+                raise RuntimeError("cannot schedule new futures after shutdown")
+            if len(self._active_threads) >= self._max_workers:
+                raise RuntimeError("max_workers exceeded for daemon pool")
+            thread_id = self._next_id
+            self._next_id += 1
+            future: Future = Future()
+
+            def _runner() -> None:
+                try:
+                    if not future.set_running_or_notify_cancel():
+                        return
+                    result = fn(*args, **kwargs)
+                    future.set_result(result)
+                except BaseException as exc:
+                    future.set_exception(exc)
+                finally:
+                    with self._lock:
+                        self._active_threads.discard(thread)
+
+            thread = threading.Thread(
+                target=_runner,
+                name=f"{self._thread_name_prefix}-{thread_id}",
+                daemon=True,
+            )
+            self._active_threads.add(thread)
+
+        thread.start()
+        return future
+
+    def shutdown(self, wait: bool = True, cancel_futures: bool = False) -> None:
+        with self._lock:
+            self._shutdown = True
+            active_threads = list(self._active_threads)
+        if cancel_futures:
+            # We cannot force-stop running daemon threads, but callers still cancel
+            # pending futures for consistent bookkeeping.
+            pass
+        if wait:
+            for thread in active_threads:
+                thread.join()
+
+
 class Orchestrator:
     """Coordinates strategists, conversations, order submission, and game progression."""
 
-    def __init__(self, config: GameConfig):
+    def __init__(self, config: GameConfig, event_emitter: EventEmitter | None = None):
         self.config = config
+        self.events = event_emitter or NoopEmitter()
+        self.controlled_powers = list(config.powers)
+        self._controlled_power_set = set(self.controlled_powers)
 
         self.game_dir = Path(config.game_dir).expanduser().resolve()
         self.game_dir.mkdir(parents=True, exist_ok=True)
@@ -38,9 +103,15 @@ class Orchestrator:
         self.game_log_path = self.game_dir / "game_log.jsonl"
 
         self.game = Game()
-        self.memory = MemoryManager(str(self.game_dir))
-        self.memory.initialize_all()
-        self.router = MessageRouter(self.game)
+        self._restrict_game_to_controlled_powers()
+        self.memory = MemoryManager(str(self.game_dir), event_emitter=self.events)
+        self.memory.initialize_all(self.controlled_powers)
+        self.router = MessageRouter(
+            self.game,
+            powers=self.controlled_powers,
+            event_emitter=self.events,
+            capture_message_content=config.observe_messages,
+        )
 
         self.strategists: dict[str, StrategistAgent] = {
             power: StrategistAgent(
@@ -48,19 +119,37 @@ class Orchestrator:
                 game=self.game,
                 memory=self.memory,
                 config=config,
+                event_emitter=self.events,
             )
-            for power in ALL_POWERS
+            for power in self.controlled_powers
         }
 
         self._notified_messages: set[int] = set()
 
     def run(self) -> None:
+        self.events.emit(
+            "game.start",
+            payload={
+                "powers": list(self.controlled_powers),
+                "summary": f"game start powers={','.join(self.controlled_powers)}",
+            },
+        )
         try:
             self._bootstrap_all()
 
             while not self.game.is_game_done:
                 phase = self.game.get_current_phase()
                 phase_start = time.monotonic()
+                self.events.emit(
+                    "phase.start",
+                    phase=phase,
+                    payload={
+                        "phase": phase,
+                        "phase_type": self.game.phase_type,
+                        "summary": f"{phase} start",
+                    },
+                )
+                self._emit_board_snapshot(phase)
 
                 if phase not in ("FORMING", "COMPLETED"):
                     year = int(phase[1:5])
@@ -87,6 +176,12 @@ class Orchestrator:
                         "duration_seconds": round(time.monotonic() - phase_start, 3),
                     }
                 )
+                self.events.emit(
+                    "phase.end",
+                    phase=phase,
+                    payload={"phase": phase, "summary": f"{phase} complete"},
+                )
+                self._emit_board_snapshot(self.game.get_current_phase())
         except GameHaltError:
             self._save_snapshot(self.game.get_current_phase())
             self._log_event(
@@ -95,13 +190,29 @@ class Orchestrator:
                     "event": "halt",
                 }
             )
+            self.events.emit(
+                "game.halt",
+                priority=PRIORITY_HIGH,
+                phase=self.game.get_current_phase(),
+                payload={"summary": "game halted due to repeated completion failures"},
+            )
             raise
         finally:
+            self.events.emit(
+                "game.end",
+                phase=self.game.get_current_phase(),
+                payload={"summary": "game loop ended"},
+            )
             for strategist in self.strategists.values():
                 strategist.close()
 
     @classmethod
-    def from_snapshot(cls, snapshot_dir: str, config: GameConfig) -> "Orchestrator":
+    def from_snapshot(
+        cls,
+        snapshot_dir: str,
+        config: GameConfig,
+        event_emitter: EventEmitter | None = None,
+    ) -> "Orchestrator":
         snapshot_path = Path(snapshot_dir).expanduser().resolve()
 
         game = Game()
@@ -111,6 +222,7 @@ class Orchestrator:
 
         orch = cls.__new__(cls)
         orch.config = config
+        orch.events = event_emitter or NoopEmitter()
         orch.game_dir = Path(config.game_dir).expanduser().resolve()
         orch.game_dir.mkdir(parents=True, exist_ok=True)
         orch.snapshots_dir = orch.game_dir / "snapshots"
@@ -118,8 +230,17 @@ class Orchestrator:
         orch.game_log_path = orch.game_dir / "game_log.jsonl"
 
         orch.game = game
-        orch.memory = MemoryManager(str(orch.game_dir))
-        orch.router = MessageRouter(orch.game)
+        orch.memory = MemoryManager(str(orch.game_dir), event_emitter=orch.events)
+        orch.controlled_powers = list(config.powers)
+        orch._controlled_power_set = set(orch.controlled_powers)
+        orch._restrict_game_to_controlled_powers()
+        orch.memory.initialize_all(orch.controlled_powers)
+        orch.router = MessageRouter(
+            orch.game,
+            powers=orch.controlled_powers,
+            event_emitter=orch.events,
+            capture_message_content=config.observe_messages,
+        )
         orch._notified_messages = set()
 
         memory_src = snapshot_path / "memory"
@@ -128,12 +249,13 @@ class Orchestrator:
                 shutil.copy(md_file, orch.game_dir / md_file.name)
 
         orch.strategists = {}
-        for power in ALL_POWERS:
+        for power in orch.controlled_powers:
             strategist = StrategistAgent(
                 power_name=power,
                 game=orch.game,
                 memory=orch.memory,
                 config=config,
+                event_emitter=orch.events,
             )
             strategist.bootstrap()
 
@@ -149,7 +271,9 @@ class Orchestrator:
         return orch
 
     def _bootstrap_all(self) -> None:
-        with ThreadPoolExecutor(max_workers=7) as pool:
+        if not self.strategists:
+            return
+        with ThreadPoolExecutor(max_workers=len(self.strategists)) as pool:
             futures = {
                 pool.submit(strategist.bootstrap): power
                 for power, strategist in self.strategists.items()
@@ -157,42 +281,153 @@ class Orchestrator:
             for future in as_completed(futures):
                 future.result()
 
+    def _restrict_game_to_controlled_powers(self) -> None:
+        """Deactivate non-configured powers so only selected powers participate."""
+        for power_name, power in self.game.powers.items():
+            if power_name in self._controlled_power_set:
+                continue
+            power.clear_units()
+            power.clear_centers()
+            for home in list(power.homes or []):
+                self.game.update_hash(power_name, loc=home, is_home=True)
+            power.homes = []
+            power.clear_orders()
+            power.goner = 1
+        self.game.clear_cache()
+
     def _run_movement_phase(self) -> None:
         phase = self.game.get_current_phase()
 
+        self.events.emit(
+            "step.start",
+            phase=phase,
+            step="STRATEGIZE",
+            payload={"step": "STRATEGIZE", "timeout_seconds": self.config.strategize_timeout, "summary": "strategize"},
+        )
         requests, timed_out_strategize = self._run_strategize_step(phase)
+        self.events.emit(
+            "step.end",
+            phase=phase,
+            step="STRATEGIZE",
+            payload={"step": "STRATEGIZE", "summary": f"requests={len(requests)} timeouts={len(timed_out_strategize)}"},
+        )
+
+        self.events.emit(
+            "step.start",
+            phase=phase,
+            step="CONVERSE",
+            payload={"step": "CONVERSE", "timeout_seconds": self.config.converse_timeout, "summary": "converse"},
+        )
         summaries = self._run_converse_step(phase, requests)
+        self.events.emit(
+            "step.end",
+            phase=phase,
+            step="CONVERSE",
+            payload={"step": "CONVERSE", "summary": f"agents={len(summaries)}"},
+        )
+
+        self.events.emit(
+            "step.start",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
+        )
         self._run_decide_step(phase, summaries, timed_out_strategize)
+        self.events.emit(
+            "step.end",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "summary": "decide complete"},
+        )
 
     def _run_retreat_phase(self) -> None:
+        phase = self.game.get_current_phase()
+        self.events.emit(
+            "step.start",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
+        )
         self._run_decide_only()
+        self.events.emit(
+            "step.end",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "summary": "decide complete"},
+        )
 
     def _run_adjustment_phase(self) -> None:
+        phase = self.game.get_current_phase()
+        self.events.emit(
+            "step.start",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "timeout_seconds": self.config.decide_timeout, "summary": "decide"},
+        )
         self._run_decide_only()
+        self.events.emit(
+            "step.end",
+            phase=phase,
+            step="DECIDE",
+            payload={"step": "DECIDE", "summary": "decide complete"},
+        )
 
     def _run_strategize_step(self, phase: str) -> tuple[dict[str, ConversationRequest], set[str]]:
         timer = PhaseTimer(self.config.strategize_timeout)
+        step_token = f"{phase}:STRATEGIZE:{time.monotonic_ns()}"
 
+        active_strategists = list(self._active_controlled_strategists())
+        if not active_strategists:
+            self._log_event(
+                {
+                    "phase": phase,
+                    "event": "strategize_complete",
+                    "requests": {},
+                }
+            )
+            return {}, set()
+
+        pool = _BestEffortDaemonPool(max_workers=len(active_strategists))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=7) as pool:
-            for power, strategist in self._active_strategists():
-                strategist.inject(timer, include_submit_orders=False)
-                futures[pool.submit(strategist.strategize, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
+            strategist.inject(timer, include_submit_orders=False)
+            futures[pool.submit(strategist.strategize, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
+        if timed_out:
+            self.events.emit(
+                "step.timeout",
+                phase=phase,
+                step="STRATEGIZE",
+                priority=PRIORITY_HIGH,
+                payload={
+                    "powers": sorted(timed_out),
+                    "summary": f"strategize timeouts={','.join(sorted(timed_out))}",
+                },
+            )
 
         requests: dict[str, ConversationRequest] = {}
-        for power, strategist in self._active_strategists():
+        for power, strategist in active_strategists:
             if power in timed_out:
                 continue
             req = strategist.get_conversation_requests()
             if req is not None and req.objectives:
-                requests[power] = req
+                objectives = self._sanitize_objectives(power, req.objectives)
+                if objectives:
+                    requests[power] = ConversationRequest(power=power, objectives=objectives)
+            strategist.invalidate_step_token(step_token)
 
         self._log_event(
             {
@@ -214,6 +449,16 @@ class Orchestrator:
 
         agents: dict[str, ConversationAgent] = {}
         for power, request in requests.items():
+            self.events.emit(
+                "conversation.agent.start",
+                phase=phase,
+                step="CONVERSE",
+                power=power,
+                payload={
+                    "targets": list(request.objectives.keys()),
+                    "summary": f"{power} targets={','.join(request.objectives.keys())}",
+                },
+            )
             agent = ConversationAgent(
                 power_name=power,
                 targets=list(request.objectives.keys()),
@@ -222,6 +467,7 @@ class Orchestrator:
                 memory_snapshot=self.memory.read_snapshot(power),
                 router=self.router,
                 config=self.config,
+                event_emitter=self.events,
             )
             agent.bootstrap()
             agents[power] = agent
@@ -233,15 +479,31 @@ class Orchestrator:
 
         while active and not timer.expired and round_num < self.config.converse_max_rounds:
             round_num += 1
+            round_token = f"{phase}:CONVERSE:{round_num}:{time.monotonic_ns()}"
+            self.events.emit(
+                "conversation.round.tick",
+                phase=phase,
+                step="CONVERSE",
+                payload={"round": round_num, "summary": f"round {round_num}"},
+            )
 
-            with ThreadPoolExecutor(max_workers=len(active)) as pool:
-                futures = {pool.submit(agent.run_round, round_num): agent for agent in active}
-                done, not_done = wait(futures, timeout=timer.remaining())
-
-            for future in done:
-                future.result()
+            pool = _BestEffortDaemonPool(max_workers=len(active))
+            futures = {}
+            for agent in active:
+                agent.activate_round_token(round_token)
+                futures[pool.submit(agent.run_round, round_num)] = agent
+            _, not_done = self._wait_for_futures(
+                pool,
+                futures,
+                timeout=timer.remaining(),
+            )
             for future in not_done:
+                futures[future].invalidate_round_token(round_token)
                 futures[future].force_finish()
+            for future, agent in futures.items():
+                if future in not_done:
+                    continue
+                agent.invalidate_round_token(round_token)
 
             flushed = self.router.flush()
             messages_sent += len(flushed)
@@ -258,6 +520,16 @@ class Orchestrator:
         summaries: dict[str, list[ConversationSummary]] = {}
         for power, agent in agents.items():
             summaries[power] = [agent.get_summary()]
+            self.events.emit(
+                "conversation.agent.finish",
+                phase=phase,
+                step="CONVERSE",
+                power=power,
+                payload={
+                    "summary": agent.get_summary().summary,
+                    "rounds": agent.get_summary().rounds_used,
+                },
+            )
             agent.close()
 
         self._log_event(
@@ -277,6 +549,7 @@ class Orchestrator:
         summaries_by_power: dict[str, list[ConversationSummary]],
         strategize_timed_out: set[str],
     ) -> None:
+        step_token = f"{phase}:DECIDE:{time.monotonic_ns()}"
         # Prepare unread context for powers that were not involved in any active conversations.
         involved_powers: set[str] = set()
         for power, summaries in summaries_by_power.items():
@@ -284,7 +557,7 @@ class Orchestrator:
             for summary in summaries:
                 involved_powers.update(summary.targets)
 
-        for power, strategist in self._active_strategists():
+        for power, strategist in self._active_controlled_strategists():
             strategist.deliver_results(
                 summaries_by_power.get(power, []),
                 self.router.get_unread(involved_powers),
@@ -292,28 +565,53 @@ class Orchestrator:
 
         timer = PhaseTimer(self.config.decide_timeout)
 
+        active_strategists = list(self._active_controlled_strategists())
+        pool = _BestEffortDaemonPool(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=7) as pool:
-            for power, strategist in self._active_strategists():
-                strategist.inject(timer, include_submit_orders=True)
-                futures[pool.submit(strategist.decide, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
+            strategist.inject(timer, include_submit_orders=True)
+            futures[pool.submit(strategist.decide, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
+        if timed_out:
+            self.events.emit(
+                "step.timeout",
+                phase=phase,
+                step="DECIDE",
+                priority=PRIORITY_HIGH,
+                payload={
+                    "powers": sorted(timed_out),
+                    "summary": f"decide timeouts={','.join(sorted(timed_out))}",
+                },
+            )
 
         order_counts: dict[str, int] = {}
-        for power, strategist in self._active_strategists():
-            orders = strategist.get_submitted_orders()
-            if power in timed_out or power in strategize_timed_out or orders is None:
+        for power in self._active_game_powers():
+            strategist = self.strategists.get(power)
+            if strategist is None:
                 applied = self._apply_default_orders(power)
             else:
-                self.game.set_orders(power, orders)
-                applied = list(orders)
+                orders = strategist.get_submitted_orders()
+                if power in timed_out or power in strategize_timed_out or orders is None:
+                    applied = self._apply_default_orders(power)
+                else:
+                    self.game.set_orders(power, orders)
+                    applied = list(orders)
             order_counts[power] = len(applied)
+        for _, strategist in active_strategists:
+            strategist.invalidate_step_token(step_token)
 
         self._log_event(
             {
@@ -326,29 +624,55 @@ class Orchestrator:
     def _run_decide_only(self) -> None:
         phase = self.game.get_current_phase()
         timer = PhaseTimer(self.config.decide_timeout)
+        step_token = f"{phase}:DECIDE_ONLY:{time.monotonic_ns()}"
 
+        active_strategists = list(self._active_controlled_strategists())
+        pool = _BestEffortDaemonPool(max_workers=max(1, len(active_strategists)))
         futures: dict[Any, str] = {}
-        with ThreadPoolExecutor(max_workers=7) as pool:
-            for power, strategist in self._active_strategists():
-                strategist.inject(timer, include_submit_orders=True)
-                futures[pool.submit(strategist.decide, phase)] = power
+        for power, strategist in active_strategists:
+            strategist.activate_step_token(step_token)
+            strategist.inject(timer, include_submit_orders=True)
+            futures[pool.submit(strategist.decide, phase)] = power
 
-            done, not_done = wait(futures, timeout=timer.remaining())
-
-        for future in done:
-            future.result()
+        _, not_done = self._wait_for_futures(
+            pool,
+            futures,
+            timeout=timer.remaining(),
+        )
 
         timed_out = {futures[future] for future in not_done}
+        for future in not_done:
+            power = futures[future]
+            strategist = self.strategists.get(power)
+            if strategist is not None:
+                strategist.invalidate_step_token(step_token)
+        if timed_out:
+            self.events.emit(
+                "step.timeout",
+                phase=phase,
+                step="DECIDE",
+                priority=PRIORITY_HIGH,
+                payload={
+                    "powers": sorted(timed_out),
+                    "summary": f"decide timeouts={','.join(sorted(timed_out))}",
+                },
+            )
 
         order_counts: dict[str, int] = {}
-        for power, strategist in self._active_strategists():
-            orders = strategist.get_submitted_orders()
-            if power in timed_out or orders is None:
+        for power in self._active_game_powers():
+            strategist = self.strategists.get(power)
+            if strategist is None:
                 applied = self._apply_default_orders(power)
             else:
-                self.game.set_orders(power, orders)
-                applied = list(orders)
+                orders = strategist.get_submitted_orders()
+                if power in timed_out or orders is None:
+                    applied = self._apply_default_orders(power)
+                else:
+                    self.game.set_orders(power, orders)
+                    applied = list(orders)
             order_counts[power] = len(applied)
+        for _, strategist in active_strategists:
+            strategist.invalidate_step_token(step_token)
 
         self._log_event({"phase": phase, "event": "decide_complete", "orders": order_counts})
 
@@ -364,6 +688,12 @@ class Orchestrator:
                 if hold:
                     orders.append(hold)
             self.game.set_orders(power, orders)
+            self.events.emit(
+                "orders.defaulted",
+                phase=self.game.get_current_phase(),
+                power=power,
+                payload={"count": len(orders), "phase_type": phase_type, "summary": f"default holds {len(orders)}"},
+            )
             return orders
 
         if phase_type == "R":
@@ -375,6 +705,12 @@ class Orchestrator:
                 if disband:
                     orders.append(disband)
             self.game.set_orders(power, orders)
+            self.events.emit(
+                "orders.defaulted",
+                phase=self.game.get_current_phase(),
+                power=power,
+                payload={"count": len(orders), "phase_type": phase_type, "summary": f"default disbands {len(orders)}"},
+            )
             return orders
 
         # Adjustment phase.
@@ -382,6 +718,12 @@ class Orchestrator:
         if build_count > 0:
             orders = ["WAIVE"] * build_count
             self.game.set_orders(power, orders)
+            self.events.emit(
+                "orders.defaulted",
+                phase=self.game.get_current_phase(),
+                power=power,
+                payload={"count": len(orders), "phase_type": phase_type, "summary": f"default waive {len(orders)}"},
+            )
             return orders
 
         if build_count < 0:
@@ -396,9 +738,21 @@ class Orchestrator:
                 if disband:
                     orders.append(disband)
             self.game.set_orders(power, orders)
+            self.events.emit(
+                "orders.defaulted",
+                phase=self.game.get_current_phase(),
+                power=power,
+                payload={"count": len(orders), "phase_type": phase_type, "summary": f"default disband {len(orders)}"},
+            )
             return orders
 
         self.game.set_orders(power, [])
+        self.events.emit(
+            "orders.defaulted",
+            phase=self.game.get_current_phase(),
+            power=power,
+            payload={"count": 0, "phase_type": phase_type, "summary": "default empty"},
+        )
         return []
 
     def _pick_first_matching_order(
@@ -482,6 +836,18 @@ class Orchestrator:
             self._notified_messages.add(timestamp)
             if accepted and objective:
                 recipient_agent.add_target(sender, objective)
+            self.events.emit(
+                "conversation.incoming_chat",
+                phase=phase,
+                step="CONVERSE",
+                power=msg.recipient,
+                payload={
+                    "sender": sender,
+                    "accepted": accepted,
+                    "objective": objective or "",
+                    "summary": f"{sender}->{msg.recipient} {'accepted' if accepted else 'declined'}",
+                },
+            )
 
     def _check_target_timeouts(self, agents: dict[str, ConversationAgent]) -> None:
         for agent in agents.values():
@@ -500,12 +866,51 @@ class Orchestrator:
             if recipient in agents:
                 agents[recipient].mark_target_responded(pending.sender)
 
-    def _active_strategists(self):
+    def _active_controlled_strategists(self):
         for power, strategist in self.strategists.items():
             if power not in self.game.powers:
                 continue
             if not self.game.powers[power].is_eliminated():
                 yield power, strategist
+
+    def _active_game_powers(self):
+        for power, state in self.game.powers.items():
+            if not state.is_eliminated():
+                yield power
+
+    def _sanitize_objectives(self, power: str, objectives: dict[str, str]) -> dict[str, str]:
+        clean: dict[str, str] = {}
+        for raw_target, objective in objectives.items():
+            target = str(raw_target).upper()
+            if target == power:
+                continue
+            if target not in self._controlled_power_set:
+                logger.warning(
+                    "%s requested conversation target %s, but %s is not configured.",
+                    power,
+                    target,
+                    target,
+                )
+                continue
+            if target not in self.game.powers or self.game.powers[target].is_eliminated():
+                continue
+            clean[target] = str(objective)
+        return clean
+
+    def _emit_board_snapshot(self, phase: str) -> None:
+        total_units = sum(len(self.game.get_units(power)) for power in self.game.powers)
+        self.events.emit(
+            "board.snapshot",
+            phase=phase,
+            priority=PRIORITY_NORMAL,
+            payload={
+                "phase": phase,
+                "active_powers": len(list(self._active_game_powers())),
+                "total_units": total_units,
+                "total_messages": len(self.game.messages),
+                "summary": f"units={total_units} messages={len(self.game.messages)}",
+            },
+        )
 
     def _snapshot_repl_state(self, strategist: StrategistAgent) -> bytes:
         env = strategist.rlm._persistent_env
@@ -567,7 +972,7 @@ class Orchestrator:
 
         memory_dir = snapshot_dir / "memory"
         memory_dir.mkdir(exist_ok=True)
-        for power in ALL_POWERS:
+        for power in self.controlled_powers:
             src = Path(self.memory.memory_path(power))
             if src.exists():
                 shutil.copy(src, memory_dir / src.name)
@@ -581,3 +986,28 @@ class Orchestrator:
     def _log_event(self, event: dict[str, Any]) -> None:
         with self.game_log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(event, sort_keys=True) + "\n")
+
+    def _wait_for_futures(
+        self,
+        pool: _BestEffortDaemonPool,
+        futures: dict[Any, Any],
+        timeout: float | None,
+    ) -> tuple[set[Any], set[Any]]:
+        done: set[Any] = set()
+        not_done: set[Any] = set()
+        try:
+            done, not_done = wait(
+                futures,
+                timeout=max(0.0, float(timeout or 0.0)),
+            )
+            for future in done:
+                future.result()
+            return done, not_done
+        finally:
+            if not_done:
+                for future in not_done:
+                    future.cancel()
+                # Don't block phase progression on stuck model calls.
+                pool.shutdown(wait=False, cancel_futures=True)
+            else:
+                pool.shutdown(wait=True, cancel_futures=True)
