@@ -31,6 +31,13 @@ class FallbackRLMChatCompletion:
     execution_time: float
 
 
+@dataclass(slots=True)
+class HookInstallReport:
+    installed: bool
+    mode: str
+    error: str | None = None
+
+
 class FallbackRLM:
     """Minimal offline-compatible RLM stub with persistent globals/locals."""
 
@@ -150,7 +157,7 @@ def install_env_hook(
     rlm_instance: Any,
     on_env_ready: Callable[[Any | None], None] | Callable[[], None],
     on_env_finished: Callable[[Any | None], None] | Callable[[], None] | None = None,
-) -> None:
+) -> HookInstallReport:
     """Ensure *on_env_ready* fires after the persistent environment is created
     but before any agent code executes.
 
@@ -166,34 +173,100 @@ def install_env_hook(
         except TypeError:
             callback()
 
+    def _resolve_env_candidate(instance: Any) -> Any | None:
+        ensure_fn = getattr(instance, "_ensure_env", None)
+        if callable(ensure_fn):
+            try:
+                env = ensure_fn()
+                if env is not None:
+                    return env
+            except Exception:
+                pass
+        for attr in ("_persistent_env", "persistent_env", "env"):
+            env = getattr(instance, attr, None)
+            if env is not None:
+                return env
+        return None
+
+    def _resolve_env_from_ctx(ctx: Any) -> Any | None:
+        if isinstance(ctx, (tuple, list)):
+            if len(ctx) >= 2 and ctx[1] is not None:
+                return ctx[1]
+        for attr in ("env", "_env"):
+            env = getattr(ctx, attr, None)
+            if env is not None:
+                return env
+        return None
+
+    if getattr(rlm_instance, "_rlm_diplomacy_hooked", False):
+        mode = str(getattr(rlm_instance, "_rlm_diplomacy_hook_mode", "already_hooked"))
+        return HookInstallReport(installed=True, mode=mode)
+
     if isinstance(rlm_instance, FallbackRLM):
         orig_completion = rlm_instance.completion
 
         @functools.wraps(orig_completion)
-        def _hooked_completion(prompt, root_prompt=None):
+        def _hooked_completion(*args, **kwargs):
             env = None
             if rlm_instance.persistent:
                 env = rlm_instance._ensure_env()
             _call(on_env_ready, env)
             try:
-                return orig_completion(prompt, root_prompt=root_prompt)
+                return orig_completion(*args, **kwargs)
             finally:
                 _call(on_env_finished, env)
 
         rlm_instance.completion = _hooked_completion
-        return
+        setattr(rlm_instance, "_rlm_diplomacy_hooked", True)
+        setattr(rlm_instance, "_rlm_diplomacy_hook_mode", "completion_wrap")
+        return HookInstallReport(installed=True, mode="completion_wrap")
 
+    spawn_attr = None
     if hasattr(rlm_instance, "_spawn_completion_context"):
-        orig_spawn = rlm_instance._spawn_completion_context
+        spawn_attr = "_spawn_completion_context"
+    elif hasattr(rlm_instance, "spawn_completion_context"):
+        spawn_attr = "spawn_completion_context"
+    if spawn_attr is not None:
+        orig_spawn = getattr(rlm_instance, spawn_attr)
 
         @contextmanager
-        def _hooked_spawn(prompt):
-            with orig_spawn(prompt) as ctx:
-                env = ctx[1] if isinstance(ctx, tuple) and len(ctx) >= 2 else None
+        def _hooked_spawn(*args, **kwargs):
+            with orig_spawn(*args, **kwargs) as ctx:
+                env = _resolve_env_from_ctx(ctx)
+                if env is None:
+                    env = _resolve_env_candidate(rlm_instance)
                 _call(on_env_ready, env)
                 try:
                     yield ctx
                 finally:
                     _call(on_env_finished, env)
 
-        rlm_instance._spawn_completion_context = _hooked_spawn
+        setattr(rlm_instance, spawn_attr, _hooked_spawn)
+        setattr(rlm_instance, "_rlm_diplomacy_hooked", True)
+        setattr(rlm_instance, "_rlm_diplomacy_hook_mode", "spawn_context")
+        return HookInstallReport(installed=True, mode="spawn_context")
+
+    completion = getattr(rlm_instance, "completion", None)
+    if callable(completion):
+        orig_completion = completion
+
+        @functools.wraps(orig_completion)
+        def _hooked_completion(*args, **kwargs):
+            env = _resolve_env_candidate(rlm_instance)
+            _call(on_env_ready, env)
+            try:
+                return orig_completion(*args, **kwargs)
+            finally:
+                post_env = _resolve_env_candidate(rlm_instance) or env
+                _call(on_env_finished, post_env)
+
+        setattr(rlm_instance, "completion", _hooked_completion)
+        setattr(rlm_instance, "_rlm_diplomacy_hooked", True)
+        setattr(rlm_instance, "_rlm_diplomacy_hook_mode", "completion_wrap")
+        return HookInstallReport(installed=True, mode="completion_wrap")
+
+    return HookInstallReport(
+        installed=False,
+        mode="unhooked",
+        error="RLM instance has no hookable completion context or completion() method.",
+    )

@@ -118,9 +118,20 @@ class ConversationAgent:
             persistent=not self._is_modal,
         )
         if self._is_modal:
-            install_env_hook(self.rlm, self._prepare_modal_env, self._capture_modal_env_outputs)
+            hook_report = install_env_hook(
+                self.rlm,
+                self._prepare_modal_env,
+                self._capture_modal_env_outputs,
+            )
         else:
-            install_env_hook(self.rlm, self._ensure_base_injection)
+            hook_report = install_env_hook(self.rlm, self._ensure_base_injection)
+        if not hook_report.installed:
+            logger.warning(
+                "%s could not install env hook (%s): %s",
+                self.power_name,
+                hook_report.mode,
+                hook_report.error or "unknown error",
+            )
 
         self._events.emit(
             "power.model",
