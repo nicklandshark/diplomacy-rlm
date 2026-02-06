@@ -2,10 +2,17 @@
 
 ## Objective
 
+Create the Diplomacy RLM framework by following the spec and implementing the code then write tests as specified then verify the tests work.
+
 1. Read the reference materials in `.tmp/` — the RLM library, vendored diplomacy engine, AI_Diplomacy harness, twenty_questions example, and the research paper
 2. Read this spec in full
-3. Write the code
-4. Run the tests in `tests/` based on `tests/TESTS.md`
+3 Think step by step and create a plan
+4. Then create a todo list
+5. Write the code
+6. Run the tests in `tests/` based on `tests/TESTS.md`
+7. Verify the tests pass and iterate on the code and tests until the code is correct and the tests pass. 
+
+ABOUT TESTS: DO NOT REWARD HACK -- DO NOT HAVE FALSE POSITIVES IF A TEST FAILS THEN ITERATE AND INVESTIGATE WHY IT FAILS ECT
 
 ## Overview
 
