@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import difflib
 import logging
+from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from rlm_diplomacy._vendor.diplomacy import Game
 
 from ..data_model import (
-    ALL_POWERS,
     ConversationRequest,
     ConversationSummary,
     GameConfig,
@@ -16,13 +18,21 @@ from ..data_model import (
 )
 from ..game_view import GameView
 from ..memory import MemoryManager
+from ..modal_bridge import (
+    apply_state,
+    build_game_snapshot,
+    build_strategist_setup_code,
+    export_state,
+)
+from ..observability import EventEmitter, NoopEmitter
+from ..observability.events import PRIORITY_HIGH, PRIORITY_NORMAL
 from ..prompts import build_strategist_system_prompt
 from ..repl_sandbox import apply_sandbox_to_env, build_sandbox_setup_code, strategist_policy
 from ..rlm_runtime import RLM, install_env_hook
 from ..sentinels import (
+    find_spawn_conversation,
     parse_spawn_completion,
     patched_rlm_parser,
-    find_spawn_conversation,
 )
 from ..timer import PhaseTimer
 
@@ -32,35 +42,93 @@ logger = logging.getLogger(__name__)
 class StrategistAgent:
     """Decision-maker agent for a single power across all phases."""
 
-    def __init__(self, power_name: str, game: Game, memory: MemoryManager, config: GameConfig):
+    def __init__(
+        self,
+        power_name: str,
+        game: Game,
+        memory: MemoryManager,
+        config: GameConfig,
+        event_emitter: EventEmitter | None = None,
+    ):
         self.power_name = power_name.upper()
         self.config = config
-        self.game_view = GameView(game=game, power_name=self.power_name)
+        self._events = event_emitter or NoopEmitter()
+        self._game = game
+        self._configured_powers = [str(power).upper() for power in config.powers]
+        self.game_view = GameView(
+            game=game,
+            power_name=self.power_name,
+            visible_powers=self._configured_powers,
+        )
         self.memory = memory
         self.memory_path = memory.memory_path(self.power_name)
+
+        self._is_modal = config.environment == "modal"
+        self._time_remaining_fn: Callable[[], float] | None = None
+        self._modal_include_submit_orders = False
+        self._modal_conversation_results: list[dict[str, Any]] = []
+        self._modal_unread_messages: list[dict[str, Any]] = []
+        self._modal_incoming_sender: str | None = None
+        self._modal_incoming_decision: dict[str, Any] | None = None
+        self._modal_memory_path = f"/tmp/{self.power_name}_memory.md"
+
         blocked = set(config.blocked_modules) if config.blocked_modules is not None else None
-        self._sandbox_policy = strategist_policy(self.memory_path, blocked_modules=blocked)
+        policy_memory_path = self._modal_memory_path if self._is_modal else self.memory_path
+        self._sandbox_policy = strategist_policy(policy_memory_path, blocked_modules=blocked)
         sandbox_setup_code = build_sandbox_setup_code(self._sandbox_policy)
+        if self._is_modal:
+            sandbox_setup_code = f"{sandbox_setup_code}\n\n{build_strategist_setup_code(self._modal_memory_path)}"
 
         self._conversation_request: ConversationRequest | None = None
         self._submitted_orders: list[str] | None = None
 
         other_backends = [config.sub_backend] if config.sub_backend else None
         other_backend_kwargs = [config.sub_backend_kwargs or {}] if config.sub_backend else None
+
+        environment_kwargs = dict(config.environment_kwargs)
+        environment_kwargs["setup_code"] = sandbox_setup_code
+        if config.environment == "local":
+            environment_kwargs["persistent"] = True
+
+        backend = config.backend_for(self.power_name)
+        backend_kwargs = config.backend_kwargs_for(self.power_name)
+
         self.rlm = RLM(
-            backend=config.backend,
-            backend_kwargs=config.backend_kwargs,
-            environment_kwargs={"persistent": True, "setup_code": sandbox_setup_code},
+            backend=backend,
+            backend_kwargs=backend_kwargs,
+            environment=config.environment,
+            environment_kwargs=environment_kwargs,
             other_backends=other_backends,
             other_backend_kwargs=other_backend_kwargs,
             max_iterations=config.max_iterations,
-            custom_system_prompt=build_strategist_system_prompt(self.power_name),
+            custom_system_prompt=build_strategist_system_prompt(
+                self.power_name,
+                active_powers=self._configured_powers,
+            ),
             verbose=config.verbose,
-            persistent=True,
+            persistent=not self._is_modal,
         )
-        install_env_hook(self.rlm, self._ensure_base_injection)
+        if self._is_modal:
+            install_env_hook(self.rlm, self._prepare_modal_env, self._capture_modal_env_outputs)
+        else:
+            install_env_hook(self.rlm, self._ensure_base_injection)
+
+        self._events.emit(
+            "power.model",
+            power=self.power_name,
+            payload={
+                "backend": backend,
+                "model": str(backend_kwargs.get("model_name", "unknown")),
+                "summary": f"{self.power_name} model configured",
+            },
+        )
 
     def bootstrap(self) -> None:
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            payload={"status": "BOOTSTRAP", "role": "STRATEGIST", "step": "BOOTSTRAP"},
+        )
         phase = self.game_view.get_current_phase()
         root_prompt = (
             f"You are {self.power_name}. Game starting. Phase: {phase}. "
@@ -70,8 +138,18 @@ class StrategistAgent:
         self._run_completion_with_retries("", root_prompt)
         # Inject durable globals once persistent env exists.
         self._ensure_base_injection()
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            payload={"status": "READY", "role": "STRATEGIST", "step": "IDLE"},
+        )
 
     def inject(self, timer: PhaseTimer, include_submit_orders: bool = False) -> None:
+        self._time_remaining_fn = timer.remaining_fn()
+        if self._is_modal:
+            self._modal_include_submit_orders = include_submit_orders
+            return
+
         self._ensure_base_injection()
         env = self.rlm._persistent_env
         if env is None:
@@ -84,10 +162,18 @@ class StrategistAgent:
             env.globals.pop("submit_orders", None)
 
     def strategize(self, phase: str) -> None:
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            phase=phase,
+            step="STRATEGIZE",
+            payload={"status": "RUNNING", "role": "STRATEGIST", "step": "STRATEGIZE"},
+        )
         self._conversation_request = None
-        env = self.rlm._persistent_env
-        if env is not None:
-            env.globals.pop("submit_orders", None)
+        if not self._is_modal:
+            env = self.rlm._persistent_env
+            if env is not None:
+                env.globals.pop("submit_orders", None)
 
         root_prompt = (
             f"Phase: {phase}. STRATEGIZE step. You have {self._time_left_for_prompt()}s remaining. "
@@ -107,13 +193,26 @@ class StrategistAgent:
             self._conversation_request = ConversationRequest(
                 power=self.power_name, objectives=objectives
             )
+            self._events.emit(
+                "conversation.spawn",
+                power=self.power_name,
+                phase=phase,
+                step="STRATEGIZE",
+                payload={
+                    "targets": sorted(objectives.keys()),
+                    "summary": f"targets={','.join(sorted(objectives.keys()))}",
+                },
+            )
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            phase=phase,
+            step="STRATEGIZE",
+            payload={"status": "WAITING", "role": "STRATEGIST", "step": "STRATEGIZE"},
+        )
 
     def deliver_results(self, summaries: list[ConversationSummary], unread: list[dict[str, Any]]) -> None:
-        env = self.rlm._persistent_env
-        if env is None:
-            return
-
-        env.locals["conversation_results"] = [
+        prepared = [
             {
                 "targets": summary.targets,
                 "summary": summary.summary,
@@ -121,9 +220,27 @@ class StrategistAgent:
             }
             for summary in summaries
         ]
+
+        if self._is_modal:
+            self._modal_conversation_results = prepared
+            self._modal_unread_messages = list(unread)
+            return
+
+        env = self.rlm._persistent_env
+        if env is None:
+            return
+
+        env.locals["conversation_results"] = prepared
         env.locals["unread_messages"] = list(unread)
 
     def decide(self, phase: str) -> None:
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            phase=phase,
+            step="DECIDE",
+            payload={"status": "RUNNING", "role": "STRATEGIST", "step": "DECIDE"},
+        )
         self._submitted_orders = None
 
         root_prompt = (
@@ -132,45 +249,81 @@ class StrategistAgent:
             "call submit_orders([...]) once, update memory, then FINAL(done)."
         )
         self._run_completion_with_retries("", root_prompt)
+        self._events.emit(
+            "agent.status",
+            power=self.power_name,
+            phase=phase,
+            step="DECIDE",
+            payload={"status": "WAITING", "role": "STRATEGIST", "step": "DECIDE"},
+        )
 
     def notify_incoming_chat(self, sender: str, message: str, phase: str) -> tuple[bool, str | None]:
         """Mini completion callback for accept/decline incoming chat requests."""
-        env = self.rlm._persistent_env
-        if env is None:
-            return False, None
+        if self._is_modal:
+            self._modal_incoming_sender = sender.upper()
+            self._modal_incoming_decision = None
+            root_prompt = (
+                f"Incoming message in {phase}: {sender.upper()} says: {message!r}. "
+                "Call accept_chat(sender, objective) or decline_chat(sender), then FINAL(done)."
+            )
+            try:
+                self._run_completion_with_retries("", root_prompt)
+            finally:
+                self._modal_incoming_sender = None
+            decision = self._modal_incoming_decision or {"accepted": False, "objective": ""}
+            accepted = bool(decision.get("accepted", False))
+            objective = str(decision.get("objective", "")).strip() if accepted else None
+        else:
+            env = self.rlm._persistent_env
+            if env is None:
+                return False, None
 
-        decision: dict[str, str | None] = {"objective": None}
+            decision: dict[str, str | None] = {"objective": None}
 
-        def accept_chat(power: str, objective: str) -> str:
-            power = power.upper()
-            if power != sender.upper():
-                return f"Error: expected sender {sender.upper()}, got {power}."
-            decision["objective"] = objective
-            return f"Accepted chat with {power}."
+            def accept_chat(power: str, objective: str) -> str:
+                power = power.upper()
+                if power != sender.upper():
+                    return f"Error: expected sender {sender.upper()}, got {power}."
+                decision["objective"] = objective
+                return f"Accepted chat with {power}."
 
-        def decline_chat(power: str) -> str:
-            power = power.upper()
-            if power != sender.upper():
-                return f"Error: expected sender {sender.upper()}, got {power}."
-            decision["objective"] = None
-            return f"Declined chat with {power}."
+            def decline_chat(power: str) -> str:
+                power = power.upper()
+                if power != sender.upper():
+                    return f"Error: expected sender {sender.upper()}, got {power}."
+                decision["objective"] = None
+                return f"Declined chat with {power}."
 
-        env.globals["accept_chat"] = accept_chat
-        env.globals["decline_chat"] = decline_chat
+            env.globals["accept_chat"] = accept_chat
+            env.globals["decline_chat"] = decline_chat
 
-        root_prompt = (
-            f"Incoming message in {phase}: {sender.upper()} says: {message!r}. "
-            "Call accept_chat(sender, objective) or decline_chat(sender), then FINAL(done)."
+            root_prompt = (
+                f"Incoming message in {phase}: {sender.upper()} says: {message!r}. "
+                "Call accept_chat(sender, objective) or decline_chat(sender), then FINAL(done)."
+            )
+
+            try:
+                self._run_completion_with_retries("", root_prompt)
+            finally:
+                env.globals.pop("accept_chat", None)
+                env.globals.pop("decline_chat", None)
+
+            objective = decision["objective"]
+            accepted = objective is not None
+
+        self._events.emit(
+            "conversation.incoming_decision",
+            power=self.power_name,
+            phase=phase,
+            step="CONVERSE",
+            payload={
+                "sender": sender.upper(),
+                "accepted": accepted,
+                "objective": objective or "",
+                "summary": f"{sender.upper()} {'accepted' if accepted else 'declined'}",
+            },
         )
-
-        try:
-            self._run_completion_with_retries("", root_prompt)
-        finally:
-            env.globals.pop("accept_chat", None)
-            env.globals.pop("decline_chat", None)
-
-        objective = decision["objective"]
-        return (objective is not None, objective)
+        return (accepted, objective)
 
     def get_conversation_requests(self) -> ConversationRequest | None:
         return self._conversation_request
@@ -191,13 +344,65 @@ class StrategistAgent:
         max_retries = self.config.max_retries
         for attempt in range(max_retries):
             try:
+                self._events.emit(
+                    "agent.completion.start",
+                    power=self.power_name,
+                    payload={
+                        "attempt": attempt + 1,
+                        "summary": f"attempt={attempt + 1}",
+                    },
+                )
+                if self.config.observe_prompts:
+                    self._events.emit(
+                        "agent.prompt",
+                        power=self.power_name,
+                        priority=PRIORITY_NORMAL,
+                        payload={
+                            "text": str(root_prompt),
+                            "summary": str(root_prompt),
+                        },
+                    )
+
+                before_text = self._memory_text_or_empty()
                 self._ensure_base_injection()
-                return self.rlm.completion(prompt, root_prompt=root_prompt)
+                result = self.rlm.completion(prompt, root_prompt=root_prompt)
+                after_text = self._memory_text_or_empty()
+
+                response_text = str(getattr(result, "response", ""))
+                if self.config.observe_repl:
+                    self._events.emit(
+                        "agent.repl",
+                        power=self.power_name,
+                        payload={"text": response_text, "summary": response_text},
+                    )
+                else:
+                    self._events.emit(
+                        "agent.completion.finish",
+                        power=self.power_name,
+                        payload={"summary": "completion finished"},
+                    )
+
+                self._emit_memory_diff(before_text, after_text)
+                return result
             except Exception as exc:  # pragma: no cover - exercised with mocked failures
                 if attempt >= max_retries - 1:
+                    self._events.emit(
+                        "agent.error",
+                        power=self.power_name,
+                        priority=PRIORITY_HIGH,
+                        payload={"summary": f"completion failed after {max_retries} retries: {exc}"},
+                    )
                     raise GameHaltError(
                         f"{self.power_name} completion() failed {max_retries} times"
                     ) from exc
+                self._events.emit(
+                    "agent.retry",
+                    power=self.power_name,
+                    payload={
+                        "attempt": attempt + 1,
+                        "summary": f"retry {attempt + 1}/{max_retries}",
+                    },
+                )
                 logger.warning(
                     "%s completion retry %s/%s failed: %s",
                     self.power_name,
@@ -207,13 +412,79 @@ class StrategistAgent:
                 )
         raise GameHaltError(f"{self.power_name} completion() retries exhausted")
 
-    def _ensure_base_injection(self) -> None:
-        env = self.rlm._persistent_env
-        if env is None:
+    def _ensure_base_injection(self, env: Any | None = None) -> None:
+        if self._is_modal:
             return
-        env.globals["game_view"] = self.game_view
-        env.globals["memory_path"] = self.memory_path
-        apply_sandbox_to_env(env, self._sandbox_policy)
+
+        active_env = env if env is not None else self.rlm._persistent_env
+        if active_env is None:
+            return
+        env_globals = getattr(active_env, "globals", None)
+        if not isinstance(env_globals, dict):
+            return
+        env_globals["game_view"] = self.game_view
+        env_globals["memory_path"] = self.memory_path
+        apply_sandbox_to_env(active_env, self._sandbox_policy)
+
+    def _prepare_modal_env(self, env: Any | None = None) -> None:
+        if not self._is_modal or env is None:
+            return
+
+        if not hasattr(env, "execute_code"):
+            return
+
+        try:
+            remaining = 0.0
+            if self._time_remaining_fn is not None:
+                remaining = max(0.0, float(self._time_remaining_fn()))
+        except Exception:
+            remaining = 0.0
+
+        state = {
+            "game_view": build_game_snapshot(self._game, self.game_view, self.power_name),
+            "memory_text": self._memory_text_or_empty(),
+            "conversation_results": list(self._modal_conversation_results),
+            "unread_messages": list(self._modal_unread_messages),
+            "allow_submit_orders": bool(self._modal_include_submit_orders),
+            "time_remaining_seconds": remaining,
+            "incoming_sender": self._modal_incoming_sender,
+        }
+        try:
+            apply_state(env, state)
+        except Exception as exc:  # pragma: no cover - depends on external modal runtime
+            logger.warning("%s modal state injection failed: %s", self.power_name, exc)
+
+    def _capture_modal_env_outputs(self, env: Any | None = None) -> None:
+        if not self._is_modal or env is None:
+            return
+        if not hasattr(env, "execute_code"):
+            return
+
+        try:
+            state = export_state(env)
+        except Exception as exc:  # pragma: no cover - depends on external modal runtime
+            logger.warning("%s modal state export failed: %s", self.power_name, exc)
+            return
+
+        memory_text = state.get("memory_text")
+        if isinstance(memory_text, str):
+            try:
+                Path(self.memory_path).write_text(memory_text, encoding="utf-8")
+            except Exception:
+                pass
+
+        if self._modal_include_submit_orders:
+            submitted_orders = state.get("submitted_orders")
+            if isinstance(submitted_orders, list):
+                normalized_orders = [str(order) for order in submitted_orders]
+                self._submit_orders(normalized_orders)
+
+        decision = state.get("chat_decision")
+        if isinstance(decision, dict):
+            self._modal_incoming_decision = {
+                "accepted": bool(decision.get("accepted", False)),
+                "objective": str(decision.get("objective", "")),
+            }
 
     def _submit_orders(self, orders: list[str]) -> str:
         if self._submitted_orders is not None:
@@ -274,12 +545,30 @@ class StrategistAgent:
                 rejected.append(order)
 
         self._submitted_orders = accepted
+        self._events.emit(
+            "orders.submitted",
+            power=self.power_name,
+            priority=PRIORITY_NORMAL,
+            payload={
+                "accepted_count": len(accepted),
+                "rejected_count": len(rejected),
+                "accepted": list(accepted) if self.config.observe_repl else [],
+                "rejected": list(rejected) if self.config.observe_repl else [],
+                "summary": f"accepted={len(accepted)} rejected={len(rejected)}",
+            },
+        )
 
         if rejected:
             return f"Accepted {len(accepted)} orders. Rejected {len(rejected)}: {rejected}"
         return f"Accepted {len(accepted)} orders."
 
     def _time_left_for_prompt(self) -> int:
+        if self._time_remaining_fn is not None:
+            try:
+                return int(max(0.0, float(self._time_remaining_fn())))
+            except Exception:
+                return 0
+
         env = self.rlm._persistent_env
         if env is None:
             return 0
@@ -290,3 +579,39 @@ class StrategistAgent:
             except Exception:
                 return 0
         return 0
+
+    def _memory_text_or_empty(self) -> str:
+        try:
+            return Path(self.memory_path).read_text(encoding="utf-8")
+        except Exception:
+            return ""
+
+    def _emit_memory_diff(self, before: str, after: str) -> None:
+        if before == after:
+            return
+
+        summary = "memory updated"
+        payload: dict[str, Any] = {"summary": summary}
+        if self.config.observe_memory_diffs:
+            before_lines = before.splitlines()
+            after_lines = after.splitlines()
+            diff_lines = list(
+                difflib.unified_diff(
+                    before_lines,
+                    after_lines,
+                    fromfile="before_memory",
+                    tofile="after_memory",
+                    lineterm="",
+                    n=2,
+                )
+            )
+            if len(diff_lines) > 80:
+                diff_lines = diff_lines[:80] + ["... (diff truncated)"]
+            payload["diff"] = "\n".join(diff_lines)
+            if diff_lines:
+                payload["summary"] = diff_lines[0]
+        self._events.emit(
+            "memory.changed",
+            power=self.power_name,
+            payload=payload,
+        )

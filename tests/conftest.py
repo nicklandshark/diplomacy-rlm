@@ -31,9 +31,21 @@ class ScriptedRLM:
 
     instances: list["ScriptedRLM"] = []
 
-    def __init__(self, *_, persistent: bool = False, backend_kwargs: dict | None = None, **__):
+    def __init__(
+        self,
+        *_,
+        backend: str = "anthropic",
+        backend_kwargs: dict | None = None,
+        environment: str = "local",
+        environment_kwargs: dict | None = None,
+        persistent: bool = False,
+        **__,
+    ):
+        self.backend = backend
         self.persistent = persistent
         self.backend_kwargs = backend_kwargs or {}
+        self.environment = environment
+        self.environment_kwargs = environment_kwargs or {}
         self._persistent_env: SimpleNamespace | None = None
         self.calls: list[tuple[str | dict[str, Any], str | None]] = []
         self._responses: deque[str] = deque()

@@ -113,3 +113,127 @@ def test_conversation_add_target_idempotent(
     agent.add_target("GERMANY", "probe")
     assert agent.targets.count("GERMANY") == 1
     assert agent.objectives["GERMANY"] == "probe"
+
+
+def test_power_model_overrides_are_applied_per_power(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        power_model_overrides={
+            "FRANCE": "model-fr",
+            "GERMANY": "model-ge",
+        },
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    france = StrategistAgent("FRANCE", fresh_game, memory, config)
+    germany = StrategistAgent("GERMANY", fresh_game, memory, config)
+
+    assert france.rlm.backend_kwargs["model_name"] == "model-fr"
+    assert germany.rlm.backend_kwargs["model_name"] == "model-ge"
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="FRANCE",
+        targets=["GERMANY"],
+        objectives={"GERMANY": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.backend_kwargs["model_name"] == "model-fr"
+
+
+def test_power_backend_overrides_are_applied_per_power(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        backend="anthropic",
+        power_backend_overrides={
+            "FRANCE": "openai",
+            "GERMANY": "anthropic",
+        },
+        power_model_overrides={
+            "FRANCE": "gpt-4.1-mini",
+            "GERMANY": "claude-sonnet-4-5",
+        },
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    france = StrategistAgent("FRANCE", fresh_game, memory, config)
+    germany = StrategistAgent("GERMANY", fresh_game, memory, config)
+    assert france.rlm.backend == "openai"
+    assert germany.rlm.backend == "anthropic"
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="FRANCE",
+        targets=["GERMANY"],
+        objectives={"GERMANY": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.backend == "openai"
+
+
+def test_agents_pass_environment_configuration_to_rlm(
+    patched_agent_rlm,
+    fresh_game,
+    tmp_game_dir: Path,
+) -> None:
+    from rlm_diplomacy.agents.conversation import ConversationAgent
+    from rlm_diplomacy.agents.strategist import StrategistAgent
+
+    memory = MemoryManager(str(tmp_game_dir))
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        environment="modal",
+        environment_kwargs={"app_name": "diplomacy-tests", "timeout": 900},
+        backend="openai",
+        backend_kwargs={"model_name": "gpt-4.1-mini"},
+        max_retries=1,
+    )
+    memory.initialize_all(config.powers)
+
+    strategist = StrategistAgent("FRANCE", fresh_game, memory, config)
+    assert strategist.rlm.environment == "modal"
+    assert strategist.rlm.persistent is False
+    assert strategist.rlm.environment_kwargs["app_name"] == "diplomacy-tests"
+    assert strategist.rlm.environment_kwargs["timeout"] == 900
+    assert "setup_code" in strategist.rlm.environment_kwargs
+
+    router = MessageRouter(fresh_game, powers=config.powers)
+    convo = ConversationAgent(
+        power_name="GERMANY",
+        targets=["FRANCE"],
+        objectives={"FRANCE": "ally"},
+        game=fresh_game,
+        memory_snapshot="snapshot",
+        router=router,
+        config=config,
+    )
+    assert convo.rlm.environment == "modal"
+    assert convo.rlm.persistent is False
+    assert convo.rlm.environment_kwargs["app_name"] == "diplomacy-tests"

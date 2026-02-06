@@ -2,11 +2,18 @@
 name = "diplomacy-rlm"
 version = "0.1.0"
 description = "Recursive Language Model harness for Diplomacy"
-readme = "SPEC.md"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "dill>=0.3.8",
+  "openai>=2.17.0",
+  "rich>=13.7.0",
   "rlm @ git+https://github.com/alexzhang13/rlm.git",
+]
+
+[project.optional-dependencies]
+modal = [
+  "modal>=0.74.0",
 ]
 
 [project.scripts]

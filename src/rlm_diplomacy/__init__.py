@@ -8,10 +8,19 @@ from .data_model import (
     GameConfig,
     GameHaltError,
     PendingMessage,
+    SUPPORTED_BACKENDS,
+    SUPPORTED_ENVIRONMENTS,
 )
 from .game_view import FilteredGameView, GameView
 from .memory import MemoryManager
 from .message_router import MessageRouter
+from .observability import (
+    BufferedEventBus,
+    LiveConsoleDashboard,
+    LiveConsoleOptions,
+    NoopEmitter,
+    RecorderEmitter,
+)
 from .orchestrator import Orchestrator
 from .timer import PhaseTimer
 
@@ -24,10 +33,17 @@ __all__ = [
     "GameConfig",
     "GameHaltError",
     "GameView",
+    "BufferedEventBus",
+    "LiveConsoleDashboard",
+    "LiveConsoleOptions",
     "MemoryManager",
     "MessageRouter",
+    "NoopEmitter",
     "Orchestrator",
     "PendingMessage",
     "PhaseTimer",
+    "RecorderEmitter",
+    "SUPPORTED_BACKENDS",
+    "SUPPORTED_ENVIRONMENTS",
     "StrategistAgent",
 ]

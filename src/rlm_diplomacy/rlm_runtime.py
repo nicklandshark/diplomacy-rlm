@@ -126,7 +126,11 @@ except Exception:  # pragma: no cover - exercised when external dependency is un
     RLMChatCompletion = FallbackRLMChatCompletion
 
 
-def install_env_hook(rlm_instance: Any, on_env_ready: Callable[[], None]) -> None:
+def install_env_hook(
+    rlm_instance: Any,
+    on_env_ready: Callable[[Any | None], None] | Callable[[], None],
+    on_env_finished: Callable[[Any | None], None] | Callable[[], None] | None = None,
+) -> None:
     """Ensure *on_env_ready* fires after the persistent environment is created
     but before any agent code executes.
 
@@ -134,15 +138,27 @@ def install_env_hook(rlm_instance: Any, on_env_ready: Callable[[], None]) -> Non
     internally creates it, so callers cannot inject globals beforehand.
     This wraps the RLM internals so the callback fires at the right moment.
     """
+    def _call(callback, env: Any | None) -> None:
+        if callback is None:
+            return
+        try:
+            callback(env)
+        except TypeError:
+            callback()
+
     if isinstance(rlm_instance, FallbackRLM):
         orig_completion = rlm_instance.completion
 
         @functools.wraps(orig_completion)
         def _hooked_completion(prompt, root_prompt=None):
+            env = None
             if rlm_instance.persistent:
-                rlm_instance._ensure_env()
-            on_env_ready()
-            return orig_completion(prompt, root_prompt=root_prompt)
+                env = rlm_instance._ensure_env()
+            _call(on_env_ready, env)
+            try:
+                return orig_completion(prompt, root_prompt=root_prompt)
+            finally:
+                _call(on_env_finished, env)
 
         rlm_instance.completion = _hooked_completion
         return
@@ -153,7 +169,11 @@ def install_env_hook(rlm_instance: Any, on_env_ready: Callable[[], None]) -> Non
         @contextmanager
         def _hooked_spawn(prompt):
             with orig_spawn(prompt) as ctx:
-                on_env_ready()
-                yield ctx
+                env = ctx[1] if isinstance(ctx, tuple) and len(ctx) >= 2 else None
+                _call(on_env_ready, env)
+                try:
+                    yield ctx
+                finally:
+                    _call(on_env_finished, env)
 
         rlm_instance._spawn_completion_context = _hooked_spawn

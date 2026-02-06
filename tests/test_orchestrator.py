@@ -57,4 +57,30 @@ def test_orchestrator_from_snapshot_roundtrip(
     with (snapshot_dir / "game_state.json").open("r", encoding="utf-8") as f:
         snapshot_state = json.load(f)
     assert restored.game.get_current_phase() == snapshot_state["name"]
-    assert len(restored.strategists) == 7
+    assert len(restored.strategists) == len(config.powers)
+
+
+def test_orchestrator_subset_powers(
+    patched_agent_rlm,
+    tmp_game_dir: Path,
+) -> None:
+    config = GameConfig(
+        game_dir=str(tmp_game_dir),
+        powers=["FRANCE", "GERMANY"],
+        max_year=1901,
+        strategize_timeout=0.5,
+        converse_timeout=0.5,
+        decide_timeout=0.5,
+        max_retries=1,
+    )
+    orchestrator = Orchestrator(config)
+    assert set(orchestrator.strategists.keys()) == {"FRANCE", "GERMANY"}
+    assert orchestrator.game.get_units("FRANCE")
+    assert orchestrator.game.get_units("GERMANY")
+    assert orchestrator.game.get_units("ITALY") == []
+    assert orchestrator.game.get_centers("ITALY") == []
+    orchestrator.run()
+
+    assert (tmp_game_dir / "FRANCE_memory.md").exists()
+    assert (tmp_game_dir / "GERMANY_memory.md").exists()
+    assert not (tmp_game_dir / "ITALY_memory.md").exists()
