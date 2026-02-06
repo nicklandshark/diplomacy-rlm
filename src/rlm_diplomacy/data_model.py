@@ -112,6 +112,8 @@ class GameConfig:
     sub_backend_kwargs: dict | None = None
     power_model_overrides: dict[str, str] = field(default_factory=dict)
     power_backend_overrides: dict[str, str] = field(default_factory=dict)
+    backend_kwargs_by_backend: dict[str, dict[str, Any]] = field(default_factory=dict)
+    power_backend_kwargs_overrides: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # Timeouts
     strategize_timeout: float = 120.0
@@ -156,6 +158,9 @@ class GameConfig:
                     "Unknown sub-backend: "
                     f"{self.sub_backend}. Supported backends: {', '.join(SUPPORTED_BACKENDS)}"
                 )
+        self.backend_kwargs = dict(self.backend_kwargs)
+        if self.sub_backend_kwargs is not None:
+            self.sub_backend_kwargs = dict(self.sub_backend_kwargs)
 
         self.environment = str(self.environment).strip().lower()
         if self.environment not in SUPPORTED_ENVIRONMENTS:
@@ -172,6 +177,21 @@ class GameConfig:
         selected = set(self.powers)
         normalized_model_overrides: dict[str, str] = {}
         normalized_backend_overrides: dict[str, str] = {}
+        normalized_backend_kwargs_by_backend: dict[str, dict[str, Any]] = {}
+        normalized_power_backend_kwargs: dict[str, dict[str, Any]] = {}
+
+        for raw_backend, raw_kwargs in self.backend_kwargs_by_backend.items():
+            backend = str(raw_backend).strip().lower()
+            if backend not in SUPPORTED_BACKENDS:
+                raise ValueError(
+                    "Unknown backend kwargs override for backend "
+                    f"{backend}. Supported backends: {', '.join(SUPPORTED_BACKENDS)}"
+                )
+            if not isinstance(raw_kwargs, dict):
+                raise ValueError(
+                    f"Backend kwargs override for {backend} must be a dict."
+                )
+            normalized_backend_kwargs_by_backend[backend] = dict(raw_kwargs)
 
         for raw_power, raw_backend in self.power_backend_overrides.items():
             power = normalize_power_name(raw_power)
@@ -187,6 +207,19 @@ class GameConfig:
                 )
             normalized_backend_overrides[power] = backend
 
+        for raw_power, raw_kwargs in self.power_backend_kwargs_overrides.items():
+            power = normalize_power_name(raw_power)
+            if power not in selected:
+                raise ValueError(
+                    "Power backend kwargs override specified for "
+                    f"{power}, which is not in configured powers."
+                )
+            if not isinstance(raw_kwargs, dict):
+                raise ValueError(
+                    f"Power backend kwargs override for {power} must be a dict."
+                )
+            normalized_power_backend_kwargs[power] = dict(raw_kwargs)
+
         for raw_power, raw_model in self.power_model_overrides.items():
             power = normalize_power_name(raw_power)
             if power not in selected:
@@ -199,14 +232,22 @@ class GameConfig:
             normalized_model_overrides[power] = model
         self.power_model_overrides = normalized_model_overrides
         self.power_backend_overrides = normalized_backend_overrides
+        self.backend_kwargs_by_backend = normalized_backend_kwargs_by_backend
+        self.power_backend_kwargs_overrides = normalized_power_backend_kwargs
 
     def backend_for(self, power: str) -> str:
         normalized = normalize_power_name(power)
         return self.power_backend_overrides.get(normalized, self.backend)
 
     def backend_kwargs_for(self, power: str) -> dict:
-        kwargs = dict(self.backend_kwargs)
-        model_override = self.power_model_overrides.get(normalize_power_name(power))
+        normalized = normalize_power_name(power)
+        backend = self.backend_for(normalized)
+        kwargs: dict[str, Any] = {}
+        if backend == self.backend:
+            kwargs.update(self.backend_kwargs)
+        kwargs.update(self.backend_kwargs_by_backend.get(backend, {}))
+        kwargs.update(self.power_backend_kwargs_overrides.get(normalized, {}))
+        model_override = self.power_model_overrides.get(normalized)
         if model_override:
             kwargs["model_name"] = model_override
         return kwargs

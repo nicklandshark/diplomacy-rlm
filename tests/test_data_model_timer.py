@@ -73,6 +73,8 @@ def test_game_config_defaults_and_factories() -> None:
     assert config.powers == ALL_POWERS
     assert config.power_model_overrides == {}
     assert config.power_backend_overrides == {}
+    assert config.backend_kwargs_by_backend == {}
+    assert config.power_backend_kwargs_overrides == {}
 
     override = GameConfig(
         max_year=1920,
@@ -84,7 +86,7 @@ def test_game_config_defaults_and_factories() -> None:
     assert override.strategize_timeout == 120.0
     assert override.powers == ["FRANCE", "GERMANY"]
     assert override.backend_kwargs_for("FRANCE")["model_name"] == "custom-model"
-    assert override.backend_kwargs_for("GERMANY")["model_name"] == "claude-opus-4-6"
+    assert "model_name" not in override.backend_kwargs_for("GERMANY")
     assert override.backend_for("FRANCE") == "anthropic"
     assert override.backend_for("GERMANY") == "openai"
 
@@ -92,6 +94,28 @@ def test_game_config_defaults_and_factories() -> None:
     cfg_b = GameConfig()
     cfg_a.backend_kwargs["x"] = 1
     assert "x" not in cfg_b.backend_kwargs
+
+
+def test_game_config_backend_kwargs_resolution_precedence() -> None:
+    config = GameConfig(
+        powers=["FRANCE", "GERMANY"],
+        backend="anthropic",
+        backend_kwargs={"model_name": "claude-sonnet-4-5", "api_key": "anthropic-key"},
+        power_backend_overrides={"FRANCE": "openai"},
+        backend_kwargs_by_backend={
+            "openai": {"model_name": "gpt-4.1-mini", "api_key": "openai-global"},
+        },
+        power_backend_kwargs_overrides={
+            "FRANCE": {"api_key": "openai-france"},
+        },
+    )
+
+    france_kwargs = config.backend_kwargs_for("FRANCE")
+    germany_kwargs = config.backend_kwargs_for("GERMANY")
+    assert france_kwargs["model_name"] == "gpt-4.1-mini"
+    assert france_kwargs["api_key"] == "openai-france"
+    assert germany_kwargs["model_name"] == "claude-sonnet-4-5"
+    assert germany_kwargs["api_key"] == "anthropic-key"
 
 
 def test_game_config_power_validation() -> None:
@@ -133,6 +157,24 @@ def test_game_config_power_validation() -> None:
         raise AssertionError("Expected ValueError for unknown backend override")
     except ValueError as exc:
         assert "Unknown power backend override" in str(exc)
+
+    try:
+        GameConfig(
+            powers=["FRANCE", "GERMANY"],
+            backend_kwargs_by_backend={"narnia": {"api_key": "x"}},
+        )
+        raise AssertionError("Expected ValueError for unknown backend kwargs override")
+    except ValueError as exc:
+        assert "Unknown backend kwargs override" in str(exc)
+
+    try:
+        GameConfig(
+            powers=["FRANCE", "GERMANY"],
+            power_backend_kwargs_overrides={"ITALY": {"api_key": "x"}},
+        )
+        raise AssertionError("Expected ValueError for out-of-subset backend kwargs override")
+    except ValueError as exc:
+        assert "not in configured powers" in str(exc)
 
     try:
         GameConfig(environment="underworld")
