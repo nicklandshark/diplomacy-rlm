@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from rich.console import Console
+from io import StringIO
 
 from rlm_diplomacy.observability import (
     BufferedEventBus,
-    LiveConsoleDashboard,
-    LiveConsoleOptions,
+    ConsoleEventLogger,
+    ConsoleLogOptions,
     RecorderEmitter,
 )
-from rlm_diplomacy.observability.console import redact_text
+from rlm_diplomacy.observability.console import format_event_line, redact_text
 from rlm_diplomacy.observability.events import ObservableEvent
 from rlm_diplomacy.observability.events import PRIORITY_CRITICAL
 
@@ -47,39 +47,7 @@ def test_redact_text_masks_secret_like_tokens() -> None:
     assert "***" in redacted
 
 
-def test_dashboard_state_applies_basic_events() -> None:
-    bus = BufferedEventBus(max_events=20)
-    dashboard = LiveConsoleDashboard(
-        bus,
-        powers=["FRANCE", "GERMANY"],
-        options=LiveConsoleOptions(detail="minimal"),
-        console=Console(record=True, force_terminal=False),
-    )
-
-    bus.emit("phase.start", payload={"phase": "S1901M", "phase_type": "M", "summary": "start"})
-    bus.emit("step.start", payload={"step": "STRATEGIZE", "timeout_seconds": 120, "summary": "step"})
-    bus.emit(
-        "agent.status",
-        power="FRANCE",
-        payload={"status": "RUNNING", "role": "STRATEGIST", "step": "STRATEGIZE"},
-    )
-    for event in bus.poll(20):
-        dashboard._apply_event(event)
-
-    assert dashboard.state.phase == "S1901M"
-    assert dashboard.state.step == "STRATEGIZE"
-    assert dashboard.state.powers["FRANCE"].status == "RUNNING"
-
-
-def test_dashboard_format_line_tolerates_non_dict_payload() -> None:
-    bus = BufferedEventBus(max_events=20)
-    dashboard = LiveConsoleDashboard(
-        bus,
-        powers=["FRANCE", "GERMANY"],
-        options=LiveConsoleOptions(detail="minimal"),
-        console=Console(record=True, force_terminal=False),
-    )
-
+def test_format_event_line_tolerates_non_dict_payload() -> None:
     event = ObservableEvent(
         event_id=1,
         event_type="debug.custom",
@@ -87,34 +55,60 @@ def test_dashboard_format_line_tolerates_non_dict_payload() -> None:
         payload="not-a-dict",  # type: ignore[arg-type]
     )
 
-    line = dashboard._format_event_line(event)
+    line = format_event_line(event)
     assert "debug.custom" in line
     assert "123" in line
 
 
-def test_dashboard_render_tolerates_unexpected_event_shapes() -> None:
-    bus = BufferedEventBus(max_events=20)
-    dashboard = LiveConsoleDashboard(
-        bus,
-        powers=["FRANCE", "GERMANY"],
-        options=LiveConsoleOptions(detail="minimal"),
-        console=Console(record=True, force_terminal=False),
+def test_console_event_logger_writes_event_lines() -> None:
+    out = StringIO()
+    logger = ConsoleEventLogger(
+        stream=out,
+        options=ConsoleLogOptions(include_timestamp=False, include_payload=True),
     )
-
-    malformed_status = ObservableEvent(
-        event_id=1,
-        event_type="agent.status",
+    logger.emit(
+        "agent.status",
+        phase="S1901M",
+        step="STRATEGIZE",
         power="FRANCE",
-        payload={"status": {"bad": "shape"}, "role": ["x"], "step": {"x": 1}},
+        payload={"status": "RUNNING", "summary": "FRANCE strategizing"},
     )
-    malformed_message = ObservableEvent(
-        event_id=2,
-        event_type="message.queued",
-        payload={"sender": ["FRANCE"], "recipient": {"r": "GERMANY"}},
+    line = out.getvalue().strip()
+    assert "agent.status" in line
+    assert "phase=S1901M" in line
+    assert "step=STRATEGIZE" in line
+    assert "power=FRANCE" in line
+    assert '"status": "RUNNING"' in line
+    assert "summary=FRANCE strategizing" in line
+
+
+def test_console_event_logger_redacts_payload() -> None:
+    out = StringIO()
+    logger = ConsoleEventLogger(
+        stream=out,
+        options=ConsoleLogOptions(include_timestamp=False, include_payload=True),
     )
+    logger.emit(
+        "agent.repl",
+        power="FRANCE",
+        payload={"summary": 'token=abcdef123456789012345678 secret="my-secret-token"'},
+    )
+    line = out.getvalue().strip()
+    assert "abcdef123456789012345678" not in line
+    assert "my-secret-token" not in line
+    assert "***" in line
 
-    dashboard._apply_event(malformed_status)
-    dashboard._apply_event(malformed_message)
 
-    # Should not raise even when event payload values have odd types.
-    dashboard._render_layout()
+def test_console_event_logger_close_stops_emission() -> None:
+    out = StringIO()
+    logger = ConsoleEventLogger(
+        stream=out,
+        options=ConsoleLogOptions(include_timestamp=False),
+    )
+    logger.emit("first.event")
+    logger.close()
+    logger.emit("second.event")
+
+    lines = [line for line in out.getvalue().splitlines() if line.strip()]
+    assert len(lines) == 1
+    assert "first.event" in lines[0]

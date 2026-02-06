@@ -55,7 +55,7 @@ uv run diplomacy-rlm \
   --modal-timeout 900
 ```
 
-Run with the live console dashboard (colors + ASCII panels + countdown):
+Run with simple console event logs:
 
 ```bash
 uv run diplomacy-rlm \
@@ -64,12 +64,11 @@ uv run diplomacy-rlm \
   --power-model FRANCE=claude-opus-4-6 \
   --power-model GERMANY=claude-sonnet-4-5 \
   --power-model ITALY=claude-3-5-haiku-latest \
-  --live-ui \
-  --live-detail trace \
-  --show-prompts \
-  --show-repl \
-  --show-messages \
-  --show-memory-diff
+  --log-events \
+  --log-prompts \
+  --log-repl \
+  --log-messages \
+  --log-memory-diff
 ```
 
 CLI validation rules:
@@ -79,7 +78,7 @@ CLI validation rules:
 - `--power-backend` must use `POWER=BACKEND` format.
 - `--power-backend` power must be present in `--powers`.
 - A base model (`--model`) or per-power models (`--power-model`) must cover all selected powers.
-- `--live-ui` is auto-disabled in CI/non-TTY unless `--force-live-ui` is provided.
+- `--log-prompts`, `--log-repl`, `--log-messages`, and `--log-memory-diff` require `--log-events`.
 
 ### Configuration
 
@@ -94,10 +93,10 @@ All settings live in `GameConfig` (`data_model.py`):
 | `power_backend_overrides` | `{}` | Optional per-power backend override (e.g. `{"FRANCE": "openai"}`) |
 | `environment` | `"local"` | RLM sandbox (`local` or `modal`) |
 | `environment_kwargs` | `{}` | Extra environment args (e.g. Modal `app_name`, `timeout`) |
-| `observe_prompts` | `False` | Include raw prompts in observability events (live UI) |
-| `observe_repl` | `False` | Include completion/REPL text in observability events (live UI) |
-| `observe_messages` | `False` | Include raw diplomatic message content in events (live UI) |
-| `observe_memory_diffs` | `False` | Include unified memory diffs in events (live UI) |
+| `observe_prompts` | `False` | Include raw prompts in observability events (console logs) |
+| `observe_repl` | `False` | Include completion/REPL text in observability events (console logs) |
+| `observe_messages` | `False` | Include raw diplomatic message content in events (console logs) |
+| `observe_memory_diffs` | `False` | Include unified memory diffs in events (console logs) |
 | `strategize_timeout` | 120s | Wall-clock limit for STRATEGIZE |
 | `converse_timeout` | 180s | Wall-clock limit for CONVERSE |
 | `decide_timeout` | 120s | Wall-clock limit for DECIDE |
@@ -205,7 +204,7 @@ All agents/Powers run in parallel via `ThreadPoolExecutor`. Timed-out agents rec
 |---|---|
 | `orchestrator.py` | Main game loop. Runs controlled powers in parallel, handles movement/retreat/adjustment flow, applies timeout-safe defaults, writes snapshots/logs, restores from snapshots, and emits structured observability events. Entry point: `Orchestrator(config).run()`. |
 | `data_model.py` | Shared types and validated `GameConfig`: power subset normalization (min 2), supported backend/environment validation, per-power model/backend overrides, and backend resolution helpers. |
-| `cli.py` | CLI entry point (`diplomacy-rlm`). Parses powers, per-power model/backend overrides, backend/sub-backend args, sandbox args (`local`/`modal`), live dashboard options, and builds `GameConfig`. |
+| `cli.py` | CLI entry point (`diplomacy-rlm`). Parses powers, per-power model/backend overrides, backend/sub-backend args, sandbox args (`local`/`modal`), console log flags, and builds `GameConfig`. |
 | `__init__.py` | Public package exports for orchestrator, agents, data model types, timer, memory/router utilities, and observability primitives. |
 
 ### Agents/Powers
@@ -239,16 +238,16 @@ All agents/Powers run in parallel via `ThreadPoolExecutor`. Timed-out agents rec
 |---|---|
 | `observability/events.py` | Canonical event schema (`ObservableEvent`) and priority constants used across runtime/agents/router/memory. |
 | `observability/bus.py` | Event emitter interfaces and implementations: `NoopEmitter`, `RecorderEmitter` (tests), and bounded `BufferedEventBus` with priority-aware dropping. |
-| `observability/console.py` | Rich live dashboard renderer: phase/step countdown, power states, message/conversation stats, event log, and inspector pane with redaction. |
+| `observability/console.py` | Simple event logger that prints one structured line per event to stdout, with payload redaction for likely secrets. |
 
 ### Tests
 
 | Module | Purpose |
 |---|---|
-| `tests/test_cli.py` | CLI parsing/validation coverage for powers, per-power model/backend overrides, sandbox flags, and live UI fallback behavior. |
+| `tests/test_cli.py` | CLI parsing/validation coverage for powers, per-power model/backend overrides, sandbox flags, and console logging flag behavior. |
 | `tests/test_data_model_timer.py` | `GameConfig` defaults/validation (including powers, backend overrides, environment validation) and `PhaseTimer` lifecycle tests. |
 | `tests/test_agents.py` | Strategist/conversation lifecycle behavior, per-power override wiring, environment propagation, and order/message flow tests. |
-| `tests/test_observability.py` | Event bus and live dashboard state-update behavior tests for the observability stack. |
+| `tests/test_observability.py` | Event bus, recorder, redaction, and console event logger behavior tests for the observability stack. |
 
 ### Vendored
 

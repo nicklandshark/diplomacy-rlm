@@ -175,7 +175,7 @@ def test_cli_rejects_fewer_than_two_powers(
     assert not _DummyOrchestrator.instances
 
 
-def test_cli_live_ui_falls_back_to_noop_emitter_when_dashboard_not_started(
+def test_cli_defaults_to_noop_emitter_without_event_logging(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -187,7 +187,6 @@ def test_cli_live_ui_falls_back_to_noop_emitter_when_dashboard_not_started(
             str(tmp_path / "game"),
             "--powers",
             "FRANCE,GERMANY",
-            "--live-ui",
         ]
     )
 
@@ -198,23 +197,11 @@ def test_cli_live_ui_falls_back_to_noop_emitter_when_dashboard_not_started(
     assert isinstance(orchestrator.kwargs["event_emitter"], cli_module.NoopEmitter)
 
 
-def test_cli_live_ui_disables_rlm_verbose_when_dashboard_starts(
+def test_cli_log_events_uses_console_event_logger(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
-
-    class _FakeDashboard:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-
-        def start(self) -> bool:
-            return True
-
-        def stop(self) -> None:
-            return None
-
-    monkeypatch.setattr(cli_module, "LiveConsoleDashboard", _FakeDashboard)
 
     cli_module.main(
         [
@@ -222,14 +209,59 @@ def test_cli_live_ui_disables_rlm_verbose_when_dashboard_starts(
             str(tmp_path / "game"),
             "--powers",
             "FRANCE,GERMANY",
-            "--live-ui",
-            "--verbose",
+            "--log-events",
         ]
     )
 
     assert len(_DummyOrchestrator.instances) == 1
     orchestrator = _DummyOrchestrator.instances[0]
     assert orchestrator.ran is True
-    assert orchestrator.config.verbose is False
     assert "event_emitter" in orchestrator.kwargs
-    assert isinstance(orchestrator.kwargs["event_emitter"], cli_module.BufferedEventBus)
+    assert isinstance(orchestrator.kwargs["event_emitter"], cli_module.ConsoleEventLogger)
+
+
+def test_cli_log_detail_flags_enable_observability_fields(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
+
+    cli_module.main(
+        [
+            "--game-dir",
+            str(tmp_path / "game"),
+            "--powers",
+            "FRANCE,GERMANY",
+            "--log-events",
+            "--log-prompts",
+            "--log-repl",
+            "--log-messages",
+            "--log-memory-diff",
+        ]
+    )
+
+    assert len(_DummyOrchestrator.instances) == 1
+    orchestrator = _DummyOrchestrator.instances[0]
+    assert orchestrator.ran is True
+    assert orchestrator.config.observe_prompts is True
+    assert orchestrator.config.observe_repl is True
+    assert orchestrator.config.observe_messages is True
+    assert orchestrator.config.observe_memory_diffs is True
+
+
+def test_cli_rejects_log_detail_flags_without_log_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_module, "Orchestrator", _DummyOrchestrator)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_module.main(
+            [
+                "--powers",
+                "FRANCE,GERMANY",
+                "--log-repl",
+            ]
+        )
+
+    assert exc.value.code == 2
+    assert not _DummyOrchestrator.instances

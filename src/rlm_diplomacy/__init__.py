@@ -16,8 +16,8 @@ from .memory import MemoryManager
 from .message_router import MessageRouter
 from .observability import (
     BufferedEventBus,
-    LiveConsoleDashboard,
-    LiveConsoleOptions,
+    ConsoleEventLogger,
+    ConsoleLogOptions,
     NoopEmitter,
     RecorderEmitter,
 )
@@ -34,8 +34,8 @@ __all__ = [
     "GameHaltError",
     "GameView",
     "BufferedEventBus",
-    "LiveConsoleDashboard",
-    "LiveConsoleOptions",
+    "ConsoleEventLogger",
+    "ConsoleLogOptions",
     "MemoryManager",
     "MessageRouter",
     "NoopEmitter",

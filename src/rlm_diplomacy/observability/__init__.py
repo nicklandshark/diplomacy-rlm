@@ -1,7 +1,7 @@
-"""Observability utilities for live console instrumentation."""
+"""Observability utilities for event logging and collection."""
 
 from .bus import BufferedEventBus, EventEmitter, NoopEmitter, RecorderEmitter
-from .console import LiveConsoleDashboard, LiveConsoleOptions
+from .console import ConsoleEventLogger, ConsoleLogOptions
 from .events import (
     PRIORITY_CRITICAL,
     PRIORITY_DEBUG,
@@ -12,9 +12,9 @@ from .events import (
 
 __all__ = [
     "BufferedEventBus",
+    "ConsoleEventLogger",
+    "ConsoleLogOptions",
     "EventEmitter",
-    "LiveConsoleDashboard",
-    "LiveConsoleOptions",
     "NoopEmitter",
     "ObservableEvent",
     "PRIORITY_CRITICAL",

@@ -19,9 +19,7 @@ from .data_model import (
     normalize_powers,
 )
 from .observability import (
-    BufferedEventBus,
-    LiveConsoleDashboard,
-    LiveConsoleOptions,
+    ConsoleEventLogger,
     NoopEmitter,
 )
 from .orchestrator import Orchestrator
@@ -199,52 +197,29 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Modal sandbox timeout in seconds (used when --sandbox modal).",
     )
     parser.add_argument(
-        "--live-ui",
+        "--log-events",
         action="store_true",
-        help="Render a live in-terminal dashboard for game progress.",
+        help="Print structured orchestration events directly to the console.",
     )
     parser.add_argument(
-        "--live-detail",
-        choices=["minimal", "standard", "trace"],
-        default="standard",
-        help="Dashboard detail level.",
-    )
-    parser.add_argument(
-        "--show-prompts",
+        "--log-prompts",
         action="store_true",
-        help="Include prompt text in live trace events.",
+        help="Include full prompt text in emitted console events.",
     )
     parser.add_argument(
-        "--show-repl",
+        "--log-repl",
         action="store_true",
-        help="Include REPL/completion response text in live trace events.",
+        help="Include full REPL/completion response text in emitted console events.",
     )
     parser.add_argument(
-        "--show-messages",
+        "--log-messages",
         action="store_true",
-        help="Include raw message content in live trace events.",
+        help="Include raw diplomatic message content in emitted console events.",
     )
     parser.add_argument(
-        "--show-memory-diff",
+        "--log-memory-diff",
         action="store_true",
-        help="Include memory unified diffs in live trace events.",
-    )
-    parser.add_argument(
-        "--force-live-ui",
-        action="store_true",
-        help="Force live dashboard even in CI/non-TTY environments.",
-    )
-    parser.add_argument(
-        "--live-fps",
-        type=float,
-        default=8.0,
-        help="Target refresh rate for live dashboard.",
-    )
-    parser.add_argument(
-        "--live-max-events",
-        type=int,
-        default=300,
-        help="Max event lines retained by live dashboard.",
+        help="Include memory unified diffs in emitted console events.",
     )
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -293,14 +268,20 @@ def main(argv: Sequence[str] | None = None) -> None:
             environment_kwargs.setdefault("app_name", args.modal_app_name)
             environment_kwargs.setdefault("timeout", args.modal_timeout)
 
-        observe_prompts = bool(args.live_ui and (args.show_prompts or args.live_detail == "trace"))
-        observe_repl = bool(args.live_ui and (args.show_repl or args.live_detail in {"standard", "trace"}))
-        observe_messages = bool(
-            args.live_ui and (args.show_messages or args.live_detail in {"standard", "trace"})
-        )
-        observe_memory_diffs = bool(
-            args.live_ui and (args.show_memory_diff or args.live_detail in {"standard", "trace"})
-        )
+        if (
+            args.log_prompts
+            or args.log_repl
+            or args.log_messages
+            or args.log_memory_diff
+        ) and not args.log_events:
+            raise ValueError(
+                "--log-prompts/--log-repl/--log-messages/--log-memory-diff require --log-events."
+            )
+
+        observe_prompts = bool(args.log_events and args.log_prompts)
+        observe_repl = bool(args.log_events and args.log_repl)
+        observe_messages = bool(args.log_events and args.log_messages)
+        observe_memory_diffs = bool(args.log_events and args.log_memory_diff)
         config = GameConfig(
             backend=args.backend,
             backend_kwargs=backend_kwargs,
@@ -322,49 +303,13 @@ def main(argv: Sequence[str] | None = None) -> None:
     except (ImportError, ValueError) as exc:
         parser.error(str(exc))
 
-    emitter = NoopEmitter()
-    bus: BufferedEventBus | None = None
-    dashboard: LiveConsoleDashboard | None = None
-    if args.live_ui:
-        bus = BufferedEventBus(max_events=max(args.live_max_events * 20, 2000))
-        dashboard = LiveConsoleDashboard(
-            bus=bus,
-            powers=powers,
-            options=LiveConsoleOptions(
-                detail=args.live_detail,
-                force=args.force_live_ui,
-                max_events=max(50, args.live_max_events),
-                fps=max(2.0, float(args.live_fps)),
-            ),
-        )
-        if dashboard.start():
-            emitter = bus
-            if config.verbose:
-                logging.getLogger("rlm_diplomacy").info(
-                    "Disabling RLM console verbose output because --live-ui is enabled."
-                )
-            # RLM verbose mode writes directly to the terminal and fights the live dashboard renderer.
-            config.verbose = False
-            logging.getLogger("rlm_diplomacy").info("Live dashboard enabled.")
-        else:
-            logging.getLogger("rlm_diplomacy").warning(
-                "Live dashboard disabled: non-TTY/CI environment (use --force-live-ui to override)."
-            )
-            config.observe_prompts = False
-            config.observe_repl = False
-            config.observe_messages = False
-            config.observe_memory_diffs = False
-            bus.close()
-            bus = None
-            dashboard = None
+    emitter = ConsoleEventLogger() if args.log_events else NoopEmitter()
 
     orchestrator = Orchestrator(config, event_emitter=emitter)
     try:
         orchestrator.run()
     finally:
         emitter.close()
-        if dashboard is not None:
-            dashboard.stop()
 
 
 if __name__ == "__main__":
