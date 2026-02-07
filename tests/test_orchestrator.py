@@ -136,7 +136,7 @@ def test_decide_timeout_drops_late_submit_orders_side_effects(
 
     monkeypatch.setattr(StrategistAgent, "decide", _slow_decide)
 
-    orchestrator._run_decide_step("S1901M", summaries_by_power={}, strategize_timed_out=set())
+    orchestrator._run_decide_step("S1901M", summaries_by_power={})
     time.sleep(0.1)
     assert orchestrator.strategists["FRANCE"].get_submitted_orders() is None
     assert orchestrator.strategists["GERMANY"].get_submitted_orders() is None

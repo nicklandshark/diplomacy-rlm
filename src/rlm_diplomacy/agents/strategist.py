@@ -339,7 +339,8 @@ class StrategistAgent:
         else:
             env = self.rlm._persistent_env
             if env is None:
-                return False, None
+                # Auto-accept when strategist env is unavailable (e.g. after timeout)
+                return True, f"Respond to {sender.upper()}'s diplomatic message."
 
             decision: dict[str, str | None] = {"objective": None}
 

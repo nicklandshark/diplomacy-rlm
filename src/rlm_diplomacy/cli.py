@@ -332,6 +332,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="Start a web viewer for the game.",
     )
     parser.add_argument(
+        "--serve-api",
+        action="store_true",
+        help="Start the SSE API sidecar only (no web viewer). Writes port to game_dir/.api_port.",
+    )
+    parser.add_argument(
         "--web-port",
         type=int,
         default=0,
@@ -439,7 +444,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         parser.error(str(exc))
 
     web_process = None
-    if args.serve_web:
+    start_sse = args.serve_web or args.serve_api
+    if start_sse:
         from .observability import BufferedEventBus, TeeEmitter
         from .observability.api import app as api_app
         from .observability.api import configure as configure_api
@@ -455,7 +461,6 @@ def main(argv: Sequence[str] | None = None) -> None:
 
         # Find ports
         api_port = _find_open_port(3100)
-        web_port = args.web_port if args.web_port else _find_open_port(api_port + 1)
 
         # Configure and start the FastAPI SSE server
         game_id = os.path.basename(os.path.abspath(args.game_dir))
@@ -469,32 +474,52 @@ def main(argv: Sequence[str] | None = None) -> None:
         api_thread = threading.Thread(target=_run_api, daemon=True)
         api_thread.start()
 
-        # Start NextJS dev server
-        web_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "web"
-        )
-        if not os.path.isdir(web_dir):
-            # Try relative to cwd
-            web_dir = os.path.join(os.getcwd(), "web")
+        # Write API port, PID, and game metadata to game directory
+        game_dir_abs = os.path.abspath(args.game_dir)
+        os.makedirs(game_dir_abs, exist_ok=True)
+        port_file = os.path.join(game_dir_abs, ".api_port")
+        with open(port_file, "w") as f:
+            f.write(str(api_port))
+        pid_file = os.path.join(game_dir_abs, ".pid")
+        with open(pid_file, "w") as f:
+            f.write(str(os.getpid()))
+        # Write backend/model metadata so the web viewer can use the same provider
+        meta_file = os.path.join(game_dir_abs, ".game_meta.json")
+        with open(meta_file, "w") as f:
+            json.dump({
+                "backend": config.backend,
+                "model": str(config.backend_kwargs.get("model_name", "")),
+            }, f)
 
-        if os.path.isdir(web_dir):
-            web_env = {
-                **os.environ,
-                "GAMES_DIR": os.path.dirname(os.path.abspath(args.game_dir)),
-                "LIVE_API_URL": f"http://127.0.0.1:{api_port}",
-                "PORT": str(web_port),
-            }
-            web_process = subprocess.Popen(
-                ["bun", "run", "dev", "--port", str(web_port)],
-                cwd=web_dir,
-                env=web_env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+        if args.serve_web:
+            # Also start NextJS dev server
+            web_port = args.web_port if args.web_port else _find_open_port(api_port + 1)
+            web_dir = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "web"
             )
-            print(f"\nGame viewer: http://localhost:{web_port}/game/{game_id}\n")
+            if not os.path.isdir(web_dir):
+                web_dir = os.path.join(os.getcwd(), "web")
+
+            if os.path.isdir(web_dir):
+                web_env = {
+                    **os.environ,
+                    "GAMES_DIR": os.path.dirname(game_dir_abs),
+                    "LIVE_API_URL": f"http://127.0.0.1:{api_port}",
+                    "PORT": str(web_port),
+                }
+                web_process = subprocess.Popen(
+                    ["bun", "run", "dev", "--port", str(web_port)],
+                    cwd=web_dir,
+                    env=web_env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                print(f"\nGame viewer: http://localhost:{web_port}/game/{game_id}\n")
+            else:
+                print(f"\nWarning: web/ directory not found, skipping web viewer.\n")
+                print(f"SSE API available at: http://127.0.0.1:{api_port}\n")
         else:
-            print(f"\nWarning: web/ directory not found, skipping web viewer.\n")
-            print(f"SSE API available at: http://127.0.0.1:{api_port}\n")
+            print(f"SSE API on port {api_port} (written to {port_file})")
     else:
         emitter = ConsoleEventLogger() if args.log_events else NoopEmitter()
 
@@ -506,6 +531,13 @@ def main(argv: Sequence[str] | None = None) -> None:
         if web_process is not None:
             web_process.terminate()
             web_process.wait(timeout=5)
+        # Clean up PID file
+        if start_sse:
+            pid_file = os.path.join(os.path.abspath(args.game_dir), ".pid")
+            try:
+                os.unlink(pid_file)
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":
