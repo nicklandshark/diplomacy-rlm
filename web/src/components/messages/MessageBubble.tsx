@@ -1,22 +1,42 @@
+"use client";
+
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import PowerBadge from "../power/PowerBadge";
+import { POWER_DISPLAY_COLORS } from "@/lib/constants";
+import { phaseDisplayName } from "@/lib/constants";
 
 interface Props {
   sender: string;
   recipient: string;
   message: string;
   phase?: string;
+  isLive?: boolean;
 }
 
-export default function MessageBubble({ sender, recipient, message, phase }: Props) {
+export default function MessageBubble({ sender, recipient, message, phase, isLive }: Props) {
+  const senderColor = POWER_DISPLAY_COLORS[sender] || "#999";
+
   return (
-    <div className="border border-gray-800 rounded p-3 bg-gray-900">
-      <div className="flex items-center gap-2 mb-1">
+    <div className="flex items-start gap-2">
+      <div
+        className="flex-1 rounded-lg p-3 bg-gray-900/80 border-l-2"
+        style={{ borderLeftColor: senderColor }}
+      >
+      <div className="flex items-center gap-1.5 mb-2">
         <PowerBadge power={sender} size="sm" />
-        <span className="text-gray-500 text-xs">&rarr;</span>
+        <span className="text-gray-600 text-[10px]">&rarr;</span>
         <PowerBadge power={recipient} size="sm" />
-        {phase && <span className="text-xs text-gray-600 ml-auto">{phase}</span>}
+        {phase && (
+          <span className="text-[10px] text-gray-600 ml-auto" title={phaseDisplayName(phase)}>
+            {phase}
+          </span>
+        )}
       </div>
-      <p className="text-sm text-gray-300 whitespace-pre-wrap">{message}</p>
+      <div className="prose prose-invert prose-xs max-w-none text-gray-300 text-[13px] leading-relaxed [&_p]:mb-1.5 [&_p:last-child]:mb-0 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0 [&_strong]:text-gray-100">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message}</ReactMarkdown>
+      </div>
+      </div>
     </div>
   );
 }

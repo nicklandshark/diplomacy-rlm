@@ -3,6 +3,7 @@
 import { useState } from "react";
 import PowerBadge from "../power/PowerBadge";
 import { phaseDisplayName } from "@/lib/constants";
+import { parseOrder, humanizeOrder } from "@/lib/parse-orders";
 import type { LiveEvent } from "@/lib/types";
 
 interface Props {
@@ -61,15 +62,35 @@ export default function ActivityItem({ event }: Props) {
 
     case "agent.repl": {
       const text = (p.text as string) || (p.summary as string) || "";
+      // Detect model failure pattern: writing markdown plans instead of executing code
+      const hasMarkdownHeadings = /^#{1,3}\s/m.test(text);
+      const hasCodeBlocks = /```python/i.test(text);
+      const isMalformed = hasMarkdownHeadings && hasCodeBlocks;
+      // Extract first meaningful line for preview
+      const firstLine = text.split("\n").find(l => l.trim().length > 0)?.trim() || "REPL output";
+      const preview = firstLine.length > 60 ? firstLine.slice(0, 60) + "..." : firstLine;
       return (
         <div className="px-2 py-1.5 text-xs">
-          <div className="flex items-center gap-1.5 mb-1">
+          <div
+            className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-800/30 rounded px-1 -mx-1 py-0.5"
+            onClick={() => setExpanded(!expanded)}
+          >
             {event.power && <PowerBadge power={event.power} size="sm" />}
-            <span className="text-gray-500">REPL</span>
+            <span className={isMalformed ? "text-red-400" : "text-gray-500"}>
+              {isMalformed ? "REPL (malformed)" : "REPL"}
+            </span>
+            <span className="text-gray-600 truncate flex-1">{preview}</span>
+            <span className="text-gray-600 text-[10px]">{expanded ? "▾" : "▸"}</span>
           </div>
-          <pre className="bg-gray-900 border border-gray-800 rounded px-2 py-1.5 text-gray-300 font-mono text-[11px] whitespace-pre-wrap overflow-x-auto max-h-40 overflow-y-auto">
-            {text}
-          </pre>
+          {expanded && (
+            <pre className={`mt-1 border rounded px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap overflow-x-auto max-h-60 overflow-y-auto ${
+              isMalformed
+                ? "bg-red-950/30 border-red-900/50 text-red-200"
+                : "bg-gray-900 border-gray-800 text-gray-300"
+            }`}>
+              {text}
+            </pre>
+          )}
         </div>
       );
     }
@@ -109,10 +130,15 @@ export default function ActivityItem({ event }: Props) {
             <span className="text-green-400">orders submitted</span>
           </div>
           {orders.length > 0 ? (
-            <ul className="pl-4 text-gray-300 font-mono text-[11px] list-disc">
-              {orders.map((o, i) => (
-                <li key={i}>{o}</li>
-              ))}
+            <ul className="pl-4 text-gray-300 text-[11px] list-disc">
+              {orders.map((o, i) => {
+                const parsed = parseOrder(o);
+                return (
+                  <li key={i} title={o}>
+                    {parsed ? humanizeOrder(parsed) : o}
+                  </li>
+                );
+              })}
             </ul>
           ) : (
             summary && <div className="text-gray-400 pl-2">{summary}</div>

@@ -1,4 +1,49 @@
 import type { ParsedOrder } from "./types";
+import { locationName as loc } from "./locations";
+
+function unit(type: "A" | "F"): string {
+  return type === "A" ? "Army" : "Fleet";
+}
+
+export function orderIcon(action: ParsedOrder["action"]): string {
+  switch (action) {
+    case "M": return "→";
+    case "H": return "⊙";
+    case "S": return "↗";
+    case "C": return "⛵";
+    case "B": return "+";
+    case "D": return "✕";
+    case "R": return "↩";
+    case "W": return "∅";
+    default: return "•";
+  }
+}
+
+export function humanizeOrder(o: ParsedOrder): string {
+  switch (o.action) {
+    case "H":
+      return `${unit(o.unitType)} in ${loc(o.loc)} holds`;
+    case "M":
+      return `${unit(o.unitType)} in ${loc(o.loc)} moves to ${loc(o.dest!)}${o.via ? " via convoy" : ""}`;
+    case "S":
+      if (o.dest && o.srcLoc) {
+        return `${unit(o.unitType)} in ${loc(o.loc)} supports ${loc(o.srcLoc)} → ${loc(o.dest)}`;
+      }
+      return `${unit(o.unitType)} in ${loc(o.loc)} supports ${loc(o.dest!)}`;
+    case "C":
+      return `${unit(o.unitType)} in ${loc(o.loc)} convoys ${loc(o.srcLoc!)} → ${loc(o.dest!)}`;
+    case "B":
+      return `Build ${unit(o.unitType)} in ${loc(o.loc)}`;
+    case "D":
+      return `${unit(o.unitType)} in ${loc(o.loc)} disbanded`;
+    case "R":
+      return `${unit(o.unitType)} in ${loc(o.loc)} retreats to ${loc(o.dest!)}`;
+    case "W":
+      return "Waive build";
+    default:
+      return o.raw;
+  }
+}
 
 export function parseOrder(raw: string): ParsedOrder | null {
   const tokens = raw.trim().split(/\s+/);

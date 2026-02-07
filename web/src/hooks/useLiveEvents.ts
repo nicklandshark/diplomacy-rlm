@@ -14,6 +14,9 @@ interface UseLiveEventsOptions {
   onEvent?: (event: LiveEvent) => void;
 }
 
+const RECONNECT_DELAY_MS = 2000;
+const MAX_RETRIES = 5;
+
 export function useLiveEvents(
   gameId: string,
   options: UseLiveEventsOptions = {},
@@ -31,11 +34,16 @@ export function useLiveEvents(
 
     let es: EventSource | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout>;
+    let retryCount = 0;
+    let disposed = false;
 
     function connect() {
+      if (disposed) return;
+
       es = new EventSource(`/api/games/${gameId}/events?after_id=${lastIdRef.current}`);
 
       es.onopen = () => {
+        retryCount = 0;
         setState(prev => ({ ...prev, connected: true, error: null }));
       };
 
@@ -61,15 +69,29 @@ export function useLiveEvents(
       });
 
       es.onerror = () => {
-        setState(prev => ({ ...prev, connected: false, error: "Connection lost" }));
         es?.close();
-        reconnectTimer = setTimeout(connect, 3000);
+
+        if (disposed) return;
+
+        retryCount += 1;
+        if (retryCount > MAX_RETRIES) {
+          setState(prev => ({
+            ...prev,
+            connected: false,
+            error: `Connection lost after ${MAX_RETRIES} retries`,
+          }));
+          return;
+        }
+
+        setState(prev => ({ ...prev, connected: false, error: "Reconnecting..." }));
+        reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
       };
     }
 
     connect();
 
     return () => {
+      disposed = true;
       es?.close();
       clearTimeout(reconnectTimer);
     };

@@ -12,13 +12,5 @@ export default async function GameLayout({
   const { gameId } = await params;
   const phases = listPhases(gameId);
 
-  return (
-    <div>
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold mb-1">{gameId}</h2>
-        <div className="text-sm text-gray-400">{phases.length} phases available</div>
-      </div>
-      {children}
-    </div>
-  );
+  return <>{children}</>;
 }

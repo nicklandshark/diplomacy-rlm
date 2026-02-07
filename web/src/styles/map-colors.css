@@ -1,26 +1,57 @@
-/* Territory influence colors */
-.austria { fill: #fce4d6 !important; }
-.england { fill: #e8d0f0 !important; }
-.france { fill: #d0e0f8 !important; }
-.germany { fill: #e8e0d0 !important; }
-.italy { fill: #d0f0d0 !important; }
-.russia { fill: #d8dce8 !important; }
-.turkey { fill: #f0eed0 !important; }
-.neutral { fill: #d8d8c8 !important; }
-.nopower { fill: #e2e2d2 !important; }
+/* ===== Dark-mode territory influence fills ===== */
+/* Deep muted tones that pop against the dark map background */
+.austria { fill: #6b3a2e !important; }
+.england { fill: #5c3770 !important; }
+.france { fill: #2e4a6e !important; }
+.germany { fill: #5a4d38 !important; }
+.italy { fill: #2e5a2e !important; }
+.russia { fill: #3d4258 !important; }
+.turkey { fill: #5c5520 !important; }
+.neutral { fill: #3a3d42 !important; }
+.nopower { fill: #2d3038 !important; }
 
-/* Unit colors */
-.unitaustria { fill: #c48f85; stroke: black; stroke-width: 1; }
-.unitengland { fill: darkviolet; stroke: black; stroke-width: 1; }
-.unitfrance { fill: royalblue; stroke: black; stroke-width: 1; }
-.unitgermany { fill: #a08a75; stroke: black; stroke-width: 1; }
-.unititaly { fill: forestgreen; stroke: black; stroke-width: 1; }
-.unitrussia { fill: #757d91; stroke: black; stroke-width: 1; }
-.unitturkey { fill: #b9a61c; stroke: black; stroke-width: 1; }
+/* Water — dark navy */
+.water { fill: #1a2a3e !important; stroke: #2a3a50 !important; stroke-width: 1; }
 
-/* Order styles */
-.varwidthshadow { stroke: black; stroke-opacity: 0.4; fill: none; }
+/* Impassable — slightly lighter than bg for definition */
+.impassable { fill: #252830 !important; stroke: #3a3d45 !important; }
+
+/* ===== Borders — subtle against dark fills ===== */
+/* Override SVG inline stroke for land territories */
+.austria, .england, .france, .germany, .italy, .russia, .turkey, .neutral, .nopower {
+  stroke: #4a4e58 !important;
+  stroke-width: 0.75;
+}
+
+/* ===== Text labels — light for readability ===== */
+.labeltext24, .labeltext18, .labeltext12 {
+  fill: #c0c8d4 !important;
+  stroke: none !important;
+}
+.currentnotetext, .currentphasetext {
+  fill: #c0c8d4 !important;
+  stroke: none !important;
+}
+.currentnoterect { display: none !important; }
+
+/* ===== Supply center markers — light strokes ===== */
+#SupplyCenterLayer circle,
+#SupplyCenter circle {
+  stroke: #a0a8b4 !important;
+}
+
+/* ===== Unit colors — brighter for dark bg contrast ===== */
+.unitaustria { fill: #d4725e; stroke: #1a1a1a; stroke-width: 1; }
+.unitengland { fill: #b060e0; stroke: #1a1a1a; stroke-width: 1; }
+.unitfrance { fill: #5080e0; stroke: #1a1a1a; stroke-width: 1; }
+.unitgermany { fill: #c0a070; stroke: #1a1a1a; stroke-width: 1; }
+.unititaly { fill: #40b040; stroke: #1a1a1a; stroke-width: 1; }
+.unitrussia { fill: #8890a8; stroke: #1a1a1a; stroke-width: 1; }
+.unitturkey { fill: #d0c030; stroke: #1a1a1a; stroke-width: 1; }
+
+/* ===== Order line styles ===== */
+.varwidthshadow { stroke: rgba(0,0,0,0.5); stroke-opacity: 0.4; fill: none; }
 .varwidthorder { fill: none; }
-.shadowdash { stroke: black; stroke-opacity: 0.4; stroke-dasharray: 8,4; fill: none; stroke-width: 10; }
+.shadowdash { stroke: rgba(0,0,0,0.5); stroke-opacity: 0.4; stroke-dasharray: 8,4; fill: none; stroke-width: 10; }
 .supportorder { stroke-dasharray: 8,4; fill: none; stroke-width: 6; }
 .convoyorder { stroke-dasharray: 4,4; fill: none; stroke-width: 6; }

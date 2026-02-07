@@ -50,7 +50,7 @@ export function useGameData(gameId: string, phase: string | null, refreshKey: nu
   return data;
 }
 
-export function useMemory(gameId: string, power: string, phase?: string) {
+export function useMemory(gameId: string, power: string, phase?: string, refreshKey: number = 0) {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -65,7 +65,7 @@ export function useMemory(gameId: string, power: string, phase?: string) {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [gameId, power, phase]);
+  }, [gameId, power, phase, refreshKey]);
 
   return { content, loading };
 }

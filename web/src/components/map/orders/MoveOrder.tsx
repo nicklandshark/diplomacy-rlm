@@ -5,6 +5,7 @@ interface Props {
   dest: string;
   powerColor: string;
   isDislodged?: boolean;
+  isHovered?: boolean;
 }
 
 function getUnitCenter(
@@ -23,6 +24,7 @@ export default function MoveOrder({
   dest,
   powerColor,
   isDislodged = false,
+  isHovered = false,
 }: Props) {
   const srcCenter = getUnitCenter(src, isDislodged);
   const destCenter = getUnitCenter(dest, false);
@@ -38,6 +40,14 @@ export default function MoveOrder({
 
   return (
     <g>
+      {isHovered && (
+        <style>{`
+          @keyframes marchingAnts {
+            from { stroke-dashoffset: 0; }
+            to { stroke-dashoffset: -40; }
+          }
+        `}</style>
+      )}
       <line
         x1={srcCenter[0]}
         y1={srcCenter[1]}
@@ -56,6 +66,22 @@ export default function MoveOrder({
         strokeWidth={6}
         markerEnd="url(#arrow)"
       />
+      {isHovered && (
+        <line
+          x1={srcCenter[0]}
+          y1={srcCenter[1]}
+          x2={destX}
+          y2={destY}
+          stroke="rgba(255,255,255,0.85)"
+          strokeWidth={8}
+          strokeLinecap="round"
+          strokeDasharray="12,8"
+          style={{
+            animation: "marchingAnts 0.6s linear infinite",
+          }}
+          pointerEvents="none"
+        />
+      )}
     </g>
   );
 }
