@@ -152,9 +152,9 @@
         <!-- UNIT SYMBOLS -->
         <symbol id="Army" viewBox="0 0 23 15" overflow="visible">
             <g>
-                <rect x="2" y="2" width="23" height="13" rx="4" stroke="black" fill="black" stroke-width="1" opacity="0.40" />
-                <rect x="0" y="0" width="23" height="13" rx="4" stroke="black" stroke-width="3%" />
-                <g stroke="black" fill="black" stroke-width="1">
+                <rect x="2" y="2" width="23" height="13" rx="4" stroke="none" fill="black" stroke-width="0" opacity="0.40" />
+                <rect x="0" y="0" width="23" height="13" rx="4" fill="currentColor" stroke="#1a1a1a" stroke-width="1.2" />
+                <g stroke="none" fill="#1a1a1a" stroke-width="0">
                     <rect x="6" y="6" width="13" height="1"/>
                     <rect x="5" y="7" width="14" height="1"/>
                     <rect x="6" y="8" width="12" height="1"/>
@@ -168,9 +168,9 @@
 
         <symbol id="Fleet" viewBox="0 0 23 15" overflow="visible">
             <g>
-                <rect x="2" y="2" width="23" height="13" rx="4" stroke="black" fill="black" stroke-width="1" opacity="0.40" />
-                <rect x="0" y="0" width="23" height="13" rx="4" stroke="black" stroke-width="3%" />
-                <g stroke="black" fill="black" stroke-width="1">
+                <rect x="2" y="2" width="23" height="13" rx="4" stroke="none" fill="black" stroke-width="0" opacity="0.40" />
+                <rect x="0" y="0" width="23" height="13" rx="4" fill="currentColor" stroke="#1a1a1a" stroke-width="1.2" />
+                <g stroke="none" fill="#1a1a1a" stroke-width="0">
                     <rect x="3" y="7" width="16.5" height="1"/>
                     <rect x="4" y="8" width="15" height="1"/>
                     <rect x="5" y="9" width="13.5" height="1"/>
@@ -185,9 +185,9 @@
         <!-- DISLODGED UNIT SYMBOLS -->
         <symbol id="DislodgedArmy" viewBox="0 0 23 15" overflow="visible">
             <g>
-                <rect x="3" y="3" width="23" height="13" rx="4" stroke="red" fill="red" stroke-width="1" opacity="0.50" />
-                <rect x="0" y="0" width="23" height="13" rx="4" stroke="red" stroke-width="3%" />
-                <g stroke="black" fill="black" stroke-width="1">
+                <rect x="3" y="3" width="23" height="13" rx="4" stroke="none" fill="red" stroke-width="0" opacity="0.50" />
+                <rect x="0" y="0" width="23" height="13" rx="4" fill="currentColor" stroke="red" stroke-width="1.2" />
+                <g stroke="none" fill="#1a1a1a" stroke-width="0">
                     <rect x="6" y="6" width="13" height="1"/>
                     <rect x="5" y="7" width="14" height="1"/>
                     <rect x="6" y="8" width="12" height="1"/>
@@ -201,9 +201,9 @@
 
         <symbol id="DislodgedFleet" viewBox="0 0 23 15" overflow="visible">
             <g>
-                <rect x="3" y="3" width="23" height="13" rx="4" stroke="red" fill="red" stroke-width="1" opacity="0.50" />
-                <rect x="0" y="0" width="23" height="13" rx="4" stroke="red" stroke-width="3%" />
-                <g stroke="black" fill="black" stroke-width="1">
+                <rect x="3" y="3" width="23" height="13" rx="4" stroke="none" fill="red" stroke-width="0" opacity="0.50" />
+                <rect x="0" y="0" width="23" height="13" rx="4" fill="currentColor" stroke="red" stroke-width="1.2" />
+                <g stroke="none" fill="#1a1a1a" stroke-width="0">
                     <rect x="3" y="7" width="16.5" height="1"/>
                     <rect x="4" y="8" width="15" height="1"/>
                     <rect x="5" y="9" width="13.5" height="1"/>

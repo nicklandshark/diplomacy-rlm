@@ -446,23 +446,26 @@ export default function GameView({ gameId, initialPhases, svgContent }: Props) {
 
         {/* Map area (center) + Activity below */}
         <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
-          <div className="flex-1 min-h-0 flex flex-col items-center overflow-hidden relative">
-            <PhaseTransitionOverlay phase={nav.currentPhase} />
-            {loading ? (
-              <div className="flex items-center justify-center h-64 text-gray-500">
-                Loading phase data...
-              </div>
-            ) : (
-              <DiplomacyMap
-                svgContent={svgContent}
-                state={state}
-                orders={displayOrders || undefined}
-                results={results}
-                hoveredOrder={hoveredOrder}
-                focusLocation={focusLocation}
-                revealedOrderCount={revealedOrderCount}
-              />
-            )}
+          <div className="flex-1 min-h-0 flex flex-col items-center overflow-hidden">
+            {/* Map container with size containment for proper aspect-ratio fitting */}
+            <div className="flex-1 min-h-0 w-full relative" style={{ containerType: 'size' }}>
+              <PhaseTransitionOverlay phase={nav.currentPhase} />
+              {loading ? (
+                <div className="flex items-center justify-center h-64 text-gray-500">
+                  Loading phase data...
+                </div>
+              ) : (
+                <DiplomacyMap
+                  svgContent={svgContent}
+                  state={state}
+                  orders={displayOrders || undefined}
+                  results={results}
+                  hoveredOrder={hoveredOrder}
+                  focusLocation={focusLocation}
+                  revealedOrderCount={revealedOrderCount}
+                />
+              )}
+            </div>
             {/* Power chips as legend */}
             <div className="scroll-fade-x flex items-center justify-center gap-1.5 px-4 py-1.5 w-full">
               {activePowers.map((power) => {

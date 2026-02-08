@@ -1,14 +1,14 @@
 /* ===== Dark-mode territory influence fills ===== */
 /* Deep muted tones that pop against the dark map background */
-.austria { fill: #6b3a2e !important; }
-.england { fill: #5c3770 !important; }
-.france { fill: #2e4a6e !important; }
-.germany { fill: #5a4d38 !important; }
-.italy { fill: #2e5a2e !important; }
-.russia { fill: #3d4258 !important; }
-.turkey { fill: #5c5520 !important; }
-.neutral { fill: #3a3d42 !important; }
-.nopower { fill: #2d3038 !important; }
+.austria { fill: #7a3528 !important; }
+.england { fill: #6b3580 !important; }
+.france { fill: #2f4a78 !important; }
+.germany { fill: #6e5a30 !important; }
+.italy { fill: #2a5e2a !important; }
+.russia { fill: #5a5850 !important; }
+.turkey { fill: #6a6020 !important; }
+.neutral { fill: #34373e !important; }
+.nopower { fill: #282b32 !important; }
 
 /* Water — dark navy */
 .water { fill: #1a2a3e !important; stroke: #2a3a50 !important; stroke-width: 1; }
@@ -16,11 +16,46 @@
 /* Impassable — slightly lighter than bg for definition */
 .impassable { fill: #252830 !important; stroke: #3a3d45 !important; }
 
+/* ===== Terrain-active mode ===== */
+/* Make SVG background transparent so WebGL terrain canvas shows through */
+.terrain-active svg { background: transparent !important; }
+.terrain-active #MapLayer > rect { fill: transparent !important; fill-opacity: 0 !important; }
+
+/* The SVG wrapper sits above the terrain canvas with normal blending.
+   Territory fills use slight transparency so terrain texture subtly
+   shows through land areas. Water is transparent so the terrain ocean
+   shader shows through directly. */
+.terrain-svg-layer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Territory fills — muted, slightly transparent so terrain texture peeks through */
+.terrain-active .austria { fill: rgba(180, 70, 55, 0.88) !important; }
+.terrain-active .england { fill: rgba(140, 70, 170, 0.88) !important; }
+.terrain-active .france { fill: rgba(65, 100, 165, 0.88) !important; }
+.terrain-active .germany { fill: rgba(160, 130, 70, 0.88) !important; }
+.terrain-active .italy { fill: rgba(60, 130, 60, 0.88) !important; }
+.terrain-active .russia { fill: rgba(150, 145, 130, 0.85) !important; }
+.terrain-active .turkey { fill: rgba(150, 135, 50, 0.88) !important; }
+.terrain-active .neutral { fill: rgba(70, 72, 78, 0.75) !important; }
+.terrain-active .nopower { fill: rgba(55, 58, 65, 0.70) !important; }
+/* Water: transparent → terrain ocean shader shows through */
+.terrain-active .water { fill: transparent !important; stroke: rgba(30, 50, 100, 0.3) !important; }
+/* Impassable: semi-transparent to reveal mountainous terrain */
+.terrain-active .impassable { fill: rgba(60, 58, 55, 0.65) !important; stroke: rgba(70, 72, 68, 0.3) !important; }
+
 /* ===== Borders — subtle against dark fills ===== */
 /* Override SVG inline stroke for land territories */
 .austria, .england, .france, .germany, .italy, .russia, .turkey, .neutral, .nopower {
   stroke: #4a4e58 !important;
   stroke-width: 0.75;
+}
+.terrain-active .austria, .terrain-active .england, .terrain-active .france,
+.terrain-active .germany, .terrain-active .italy, .terrain-active .russia,
+.terrain-active .turkey, .terrain-active .neutral, .terrain-active .nopower {
+  stroke: rgba(30, 32, 40, 0.7) !important;
+  stroke-width: 0.8;
 }
 
 /* ===== Text labels — light for readability ===== */
@@ -28,26 +63,35 @@
   fill: #c0c8d4 !important;
   stroke: none !important;
 }
+.terrain-active .labeltext24, .terrain-active .labeltext18, .terrain-active .labeltext12 {
+  fill: #d0d4dc !important;
+  stroke: rgba(0, 0, 0, 0.6) !important;
+  stroke-width: 0.6;
+  paint-order: stroke fill;
+}
 .currentnotetext, .currentphasetext {
   fill: #c0c8d4 !important;
   stroke: none !important;
 }
 .currentnoterect { display: none !important; }
 
-/* ===== Supply center markers — light strokes ===== */
+/* ===== Supply center markers ===== */
 #SupplyCenterLayer circle,
 #SupplyCenter circle {
-  stroke: #a0a8b4 !important;
+  stroke: #d0d8e4 !important;
 }
 
-/* ===== Unit colors — brighter for dark bg contrast ===== */
-.unitaustria { fill: #d4725e; stroke: #1a1a1a; stroke-width: 1; }
-.unitengland { fill: #b060e0; stroke: #1a1a1a; stroke-width: 1; }
-.unitfrance { fill: #5080e0; stroke: #1a1a1a; stroke-width: 1; }
-.unitgermany { fill: #c0a070; stroke: #1a1a1a; stroke-width: 1; }
-.unititaly { fill: #40b040; stroke: #1a1a1a; stroke-width: 1; }
-.unitrussia { fill: #8890a8; stroke: #1a1a1a; stroke-width: 1; }
-.unitturkey { fill: #d0c030; stroke: #1a1a1a; stroke-width: 1; }
+/* ===== Unit colors ===== */
+/* `color` feeds into `currentColor` used by symbol body fill;
+   `fill` is set as fallback for direct inheritance.
+   `!important` overrides the embedded SVG <style> defaults. */
+.unitaustria { color: #ff9878 !important; fill: #ff9878 !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unitengland { color: #d080ff !important; fill: #d080ff !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unitfrance { color: #70a0ff !important; fill: #70a0ff !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unitgermany { color: #e8c888 !important; fill: #e8c888 !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unititaly { color: #58d058 !important; fill: #58d058 !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unitrussia { color: #a8b0d0 !important; fill: #a8b0d0 !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
+.unitturkey { color: #f0e040 !important; fill: #f0e040 !important; fill-opacity: 1 !important; stroke: #1a1a1a; stroke-width: 1.2; }
 
 /* ===== Order line styles ===== */
 .varwidthshadow { stroke: rgba(0,0,0,0.5); stroke-opacity: 0.4; fill: none; }

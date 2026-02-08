@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback, useEffect, useMemo, memo } from "react";
 import { createPortal } from "react-dom";
 import TerritoryOverlay from "./TerritoryOverlay";
+import TerrainCanvas from "./TerrainCanvas";
 import UnitLayer from "./UnitLayer";
 import UnitTransitionLayer from "./UnitTransitionLayer";
 import OrderLayer from "./OrderLayer";
@@ -12,9 +13,9 @@ import { Coordinates, SymbolSizes } from "@/lib/map-metadata";
 import type { GameState, PhaseResults } from "@/lib/types";
 import { parseOrders } from "@/lib/parse-orders";
 import { useUnitTransition } from "@/hooks/useUnitTransition";
+import type { TerrainConfig } from "@/lib/terrain-config";
 
 const DEFAULT_VIEWBOX = { x: 0, y: 0, w: 1835, h: 1360 };
-const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
 const UNIT_HIT_RADIUS = 22;
 
@@ -26,6 +27,8 @@ interface DiplomacyMapProps {
   hoveredOrder?: string | null;
   focusLocation?: string | null;
   revealedOrderCount?: number; // -1 or undefined = show all; 0+ = step-through count
+  terrainConfig?: Partial<TerrainConfig>;
+  showTerrain?: boolean;
 }
 
 function clientToSvg(
@@ -40,9 +43,9 @@ function clientToSvg(
   ];
 }
 
-/** Memoized base SVG — only re-renders when svgContent changes */
-const BaseSvg = memo(function BaseSvg({ html }: { html: string }) {
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+/** Memoized base SVG — only re-renders when svgContent or className changes */
+const BaseSvg = memo(function BaseSvg({ html, className }: { html: string; className?: string }) {
+  return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
 export default function DiplomacyMap({
@@ -53,10 +56,13 @@ export default function DiplomacyMap({
   hoveredOrder,
   focusLocation,
   revealedOrderCount,
+  terrainConfig,
+  showTerrain = true,
 }: DiplomacyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState(DEFAULT_VIEWBOX);
   const [isPanning, setIsPanning] = useState(false);
+  const [terrainReady, setTerrainReady] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
   const viewBoxRef = useRef(viewBox);
   viewBoxRef.current = viewBox;
@@ -87,11 +93,20 @@ export default function DiplomacyMap({
         // Ease-out cubic
         const ease = 1 - Math.pow(1 - t, 3);
 
-        const next = {
+        const lerped = {
           x: start.x + (target.x - start.x) * ease,
           y: start.y + (target.y - start.y) * ease,
           w: start.w + (target.w - start.w) * ease,
           h: start.h + (target.h - start.h) * ease,
+        };
+        // Clamp intermediate frames to prevent out-of-bounds during animation
+        const w = Math.min(lerped.w, DEFAULT_VIEWBOX.w);
+        const h = Math.min(lerped.h, DEFAULT_VIEWBOX.h);
+        const next = {
+          x: Math.max(0, Math.min(DEFAULT_VIEWBOX.w - w, lerped.x)),
+          y: Math.max(0, Math.min(DEFAULT_VIEWBOX.h - h, lerped.y)),
+          w,
+          h,
         };
         setViewBox(next);
 
@@ -151,7 +166,9 @@ export default function DiplomacyMap({
   // Memoize parsed orders — only recompute when orders object changes
   const parsedOrders = useMemo(() => (orders ? parseOrders(orders) : []), [orders]);
 
-  // After BaseSvg mounts, find the SVG and inject a <g> for our overlay layers
+  // After BaseSvg mounts, find the SVG and inject a <g> for our overlay layers.
+  // Re-run when terrainReady changes because BaseSvg's className change may cause
+  // React to reconcile the wrapper div, potentially destroying the injected portal group.
   useEffect(() => {
     const svg = containerRef.current?.querySelector("svg");
     if (!svg) return;
@@ -163,7 +180,7 @@ export default function DiplomacyMap({
       svg.appendChild(g);
     }
     setPortalTarget(g);
-  }, [svgContent]);
+  }, [svgContent, terrainReady]);
 
   // Build province->power lookup from centers
   const provinceOwnerRef = useRef<Record<string, string>>({});
@@ -264,15 +281,26 @@ export default function DiplomacyMap({
     [isPanning],
   );
 
-  // Zoom: ctrl+scroll or pinch
+  // Clamp viewBox so you can't pan outside the map bounds
+  const clampViewBox = useCallback((vb: { x: number; y: number; w: number; h: number }) => {
+    const w = Math.min(vb.w, DEFAULT_VIEWBOX.w);
+    const h = Math.min(vb.h, DEFAULT_VIEWBOX.h);
+    return {
+      x: Math.max(0, Math.min(DEFAULT_VIEWBOX.w - w, vb.x)),
+      y: Math.max(0, Math.min(DEFAULT_VIEWBOX.h - h, vb.y)),
+      w,
+      h,
+    };
+  }, []);
+
+  // Zoom: scroll wheel (no modifier needed)
   const handleWheel = useCallback((e: WheelEvent) => {
-    if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     const factor = e.deltaY > 0 ? 1.1 : 0.9;
     const vb = viewBoxRef.current;
 
-    const nw = Math.max(DEFAULT_VIEWBOX.w / MAX_ZOOM, Math.min(DEFAULT_VIEWBOX.w / MIN_ZOOM, vb.w * factor));
-    const nh = Math.max(DEFAULT_VIEWBOX.h / MAX_ZOOM, Math.min(DEFAULT_VIEWBOX.h / MIN_ZOOM, vb.h * factor));
+    const nw = Math.max(DEFAULT_VIEWBOX.w / MAX_ZOOM, Math.min(DEFAULT_VIEWBOX.w, vb.w * factor));
+    const nh = Math.max(DEFAULT_VIEWBOX.h / MAX_ZOOM, Math.min(DEFAULT_VIEWBOX.h, vb.h * factor));
     const actualFactor = nw / vb.w;
 
     const svg = containerRef.current?.querySelector("svg");
@@ -281,13 +309,13 @@ export default function DiplomacyMap({
     const mx = ((e.clientX - rect.left) / rect.width) * vb.w + vb.x;
     const my = ((e.clientY - rect.top) / rect.height) * vb.h + vb.y;
 
-    setViewBox({
+    setViewBox(clampViewBox({
       x: mx - (mx - vb.x) * actualFactor,
       y: my - (my - vb.y) * actualFactor,
       w: nw,
       h: nh,
-    });
-  }, []);
+    }));
+  }, [clampViewBox]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -295,6 +323,14 @@ export default function DiplomacyMap({
     el.addEventListener("wheel", handleWheel, { passive: false });
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
+
+  // Also clamp the focus-zoom animation targets
+  const clampedAnimateViewBox = useCallback(
+    (target: { x: number; y: number; w: number; h: number }) => {
+      animateViewBox(clampViewBox(target));
+    },
+    [animateViewBox, clampViewBox],
+  );
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
@@ -312,10 +348,10 @@ export default function DiplomacyMap({
       const vb = viewBoxRef.current;
       const dx = ((e.clientX - panStartRef.current.x) / rect.width) * vb.w;
       const dy = ((e.clientY - panStartRef.current.y) / rect.height) * vb.h;
-      setViewBox((prev) => ({ ...prev, x: prev.x - dx, y: prev.y - dy }));
+      setViewBox((prev) => clampViewBox({ ...prev, x: prev.x - dx, y: prev.y - dy }));
       panStartRef.current = { x: e.clientX, y: e.clientY };
     },
-    [isPanning],
+    [isPanning, clampViewBox],
   );
 
   const handleMouseUp = useCallback(() => setIsPanning(false), []);
@@ -332,14 +368,26 @@ export default function DiplomacyMap({
       svg.setAttribute("width", "100%");
       svg.setAttribute("height", "100%");
       svg.style.cursor = isPanning ? "grabbing" : "grab";
+      // When terrain is ready, make SVG background transparent so WebGL canvas shows
+      if (showTerrain && terrainReady) {
+        svg.style.background = "transparent";
+        const bgRect = svg.querySelector("#MapLayer > rect");
+        if (bgRect) {
+          bgRect.setAttribute("fill", "transparent");
+          bgRect.setAttribute("fill-opacity", "0");
+        }
+      }
     }
-  }, [viewBox, isPanning]);
+  }, [viewBox, isPanning, showTerrain, terrainReady]);
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full max-h-full overflow-hidden bg-gray-900 rounded-lg border border-gray-800"
-      style={{ aspectRatio: `${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}` }}
+      className={`relative overflow-hidden rounded-lg border border-gray-800 mx-auto ${showTerrain && terrainReady ? "terrain-active" : "bg-gray-900"}`}
+      style={{
+        width: `min(100cqw, calc(100cqh * ${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}))`,
+        aspectRatio: `${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}`,
+      }}
       onMouseDown={handleMouseDown}
       onMouseMove={(e) => {
         handleMouseMove(e);
@@ -353,11 +401,13 @@ export default function DiplomacyMap({
       }}
       onDoubleClick={handleDoubleClick}
     >
-      <BaseSvg html={svgContent} />
+      {showTerrain && <TerrainCanvas config={terrainConfig} viewBox={viewBox} svgContent={svgContent} onReady={() => setTerrainReady(true)} />}
+      <BaseSvg html={svgContent} className={showTerrain && terrainReady ? "terrain-svg-layer" : undefined} />
       <TerritoryOverlay
         svgContainer={containerRef.current}
         influence={state?.influence || {}}
         centers={state?.centers || {}}
+        refreshKey={terrainReady}
       />
       {/* Render units + orders inside the base SVG via portal — shares symbol defs & viewBox */}
       {portalTarget && state && createPortal(
