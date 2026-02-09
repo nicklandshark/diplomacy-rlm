@@ -241,26 +241,34 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
       </TacticalPanel>
 
       {/* Main 3-Column Layout */}
-      <div className="grid grid-cols-[minmax(280px,320px)_1fr_minmax(320px,380px)] gap-4 flex-1 min-h-0">
+      <div className="flex gap-4 flex-1 min-h-0">
         {/* Left Sidebar: Orders/Messages/Summary */}
-        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
+        <div className="w-72 flex-shrink-0 flex flex-col gap-4 min-h-0">
           <TacticalPanel title="INTELLIGENCE" className="flex-1 min-h-0 flex flex-col">
             {/* Tab Buttons */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-1 mb-4">
               {(["orders", "messages", "summary"] as LeftTab[]).map((tab) => (
-                <CommandButton
+                <button
                   key={tab}
-                  variant={leftTab === tab ? "primary" : "secondary"}
                   onClick={() => setLeftTab(tab)}
-                  className="flex-1 !py-2 !text-xs uppercase"
+                  className={`flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wider border-2 transition-all ${
+                    leftTab === tab
+                      ? "bg-[#ff9500] border-[#ff9500] text-[#0a0a0a]"
+                      : "bg-[#3a3a3a] border-[#3a3a3a] text-[#ff9500] hover:border-[#ff9500]/50"
+                  }`}
+                  style={{
+                    boxShadow: leftTab === tab
+                      ? "0 0 12px rgba(255, 149, 0, 0.4), inset 0 2px 4px rgba(0,0,0,0.3)"
+                      : "inset 0 2px 4px rgba(0,0,0,0.6)"
+                  }}
                 >
                   {tab}
                   {tab === "messages" && unreadCount > 0 && leftTab !== "messages" && (
-                    <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold bg-[#4a7c59] text-white rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-[#4a7c59] text-white rounded-full">
                       {unreadCount}
                     </span>
                   )}
-                </CommandButton>
+                </button>
               ))}
             </div>
 
@@ -381,7 +389,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
 
         {/* Right Sidebar: Activity + Memory */}
-        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
+        <div className="w-72 flex-shrink-0 flex flex-col gap-4 min-h-0">
           {/* Activity Feed */}
           <ActionLog
             actions={gameLog.map((entry, idx) => ({
