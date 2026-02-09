@@ -1,7 +1,7 @@
 // web/src/app/military-demo/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePhases } from "@/hooks/usePhases";
 import { usePhaseNavigation } from "@/hooks/usePhaseNavigation";
 import { useGameData, useMemory } from "@/hooks/useGameData";
@@ -9,6 +9,7 @@ import { useAllMessages } from "@/hooks/useAllMessages";
 import { useGameLog } from "@/hooks/useGameLog";
 import { parseOrder, humanizeOrder } from "@/lib/parse-orders";
 import MemoryViewer from "@/components/memory/MemoryViewer";
+import DiplomacyMap from "@/components/map/DiplomacyMap";
 
 // Simple panel component for demo structure
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
@@ -41,6 +42,14 @@ export default function MilitaryDemoPage() {
     selectedPower || "FRANCE",
     nav.currentPhase || undefined
   );
+  const [hoveredTerritory, setHoveredTerritory] = useState<string | null>(null);
+  const [svgContent, setSvgContent] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/diplomacy_map.svg")
+      .then(r => r.text())
+      .then(setSvgContent);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#e0e0e0] p-4">
@@ -204,9 +213,19 @@ export default function MilitaryDemoPage() {
           {/* Center Map */}
           <div>
             <Panel title="TACTICAL MAP">
-              <div className="aspect-[4/3] flex items-center justify-center">
-                <div className="text-sm text-[#808080]">Map Placeholder</div>
-              </div>
+              {svgContent && state ? (
+                <DiplomacyMap
+                  svgContent={svgContent}
+                  state={state}
+                  orders={orders || {}}
+                  results={results || {}}
+                  onTerritoryHover={setHoveredTerritory}
+                />
+              ) : (
+                <div className="aspect-[4/3] flex items-center justify-center">
+                  <div className="text-[#808080]">Loading map...</div>
+                </div>
+              )}
             </Panel>
           </div>
 
