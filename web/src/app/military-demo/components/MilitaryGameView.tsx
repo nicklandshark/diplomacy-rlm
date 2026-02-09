@@ -162,7 +162,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
   }, [activePowers, selectedPower]);
 
   return (
-    <div className="flex flex-col gap-4 h-[calc(100vh-80px)] bg-[#0a0a0a] p-4">
+    <div className="flex flex-col gap-4 h-screen bg-[#0a0a0a] p-4 overflow-hidden">
       {/* Top Control Panel */}
       <TacticalPanel className="!p-4">
         <div className="flex items-center justify-between gap-4">
@@ -244,9 +244,10 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
       <div className="flex gap-3 flex-1 min-h-0">
         {/* Left Sidebar: Orders/Messages/Summary */}
         <div className="w-64 min-w-[240px] flex-shrink flex flex-col gap-3 min-h-0">
-          <TacticalPanel title="INTELLIGENCE" className="flex-1 min-h-0 flex flex-col">
-            {/* Tab Buttons */}
-            <div className="flex gap-1 mb-3">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <TacticalPanel title="INTELLIGENCE" className="h-full flex flex-col">
+              {/* Tab Buttons */}
+              <div className="flex gap-1 mb-3">
               {(["orders", "messages", "summary"] as LeftTab[]).map((tab) => (
                 <button
                   key={tab}
@@ -366,6 +367,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
               )}
             </div>
           </TacticalPanel>
+          </div>
         </div>
 
         {/* Center: Map */}
