@@ -1,0 +1,20 @@
+{
+  "1770410853702065": {
+    "message": "Hello, I am representing FRANCE. I wish to establish a non-aggression pact between our nations. Are you open to discussing this proposal?",
+    "phase": "F1905M",
+    "recipient": "AUSTRIA",
+    "sender": "FRANCE"
+  },
+  "1770410954223799": {
+    "message": "We are open to discussing a non-aggression pact. It could be mutually beneficial given our current geopolitical situation.",
+    "phase": "F1905M",
+    "recipient": "FRANCE",
+    "sender": "AUSTRIA"
+  },
+  "1770410954223918": {
+    "message": "I am interested in discussing a non-aggression pact between our nations.",
+    "phase": "F1905M",
+    "recipient": "FRANCE",
+    "sender": "AUSTRIA"
+  }
+}
