@@ -7,6 +7,7 @@ import { usePhaseNavigation } from "@/hooks/usePhaseNavigation";
 import { useGameData, useMemory } from "@/hooks/useGameData";
 import { useAllMessages } from "@/hooks/useAllMessages";
 import { useGameLog } from "@/hooks/useGameLog";
+import { useLiveEvents } from "@/hooks/useLiveEvents";
 import { parseOrder, humanizeOrder } from "@/lib/parse-orders";
 import MemoryViewer from "@/components/memory/MemoryViewer";
 import DiplomacyMap from "@/components/map/DiplomacyMap";
@@ -58,6 +59,10 @@ export default function MilitaryDemoPage() {
     setDataRefreshKey(k => k + 1);
   };
 
+  const liveEvents = useLiveEvents(DEMO_GAME_ID, {
+    onEvent: (event) => console.log("SSE Event:", event)
+  });
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#e0e0e0] p-4">
       <div className="max-w-[1920px] mx-auto">
@@ -102,7 +107,7 @@ export default function MilitaryDemoPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <div className={`w-2 h-2 rounded-full ${liveEvents.connected ? "bg-green-400" : "bg-red-400"} animate-pulse`} />
                 <span className="text-xs text-[#808080]">LIVE</span>
               </div>
             </div>
