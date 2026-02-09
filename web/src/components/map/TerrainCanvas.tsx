@@ -475,8 +475,10 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
 
       gl.uniform1f(u.u_time, t * 0.001);
       gl.uniform2f(u.u_resolution, w, h);
-      // ViewBox: normalize to 0-1 range relative to full map
-      gl.uniform4f(u.u_viewBox, vb.x / MAP_W, vb.y / MAP_H, vb.w / MAP_W, vb.h / MAP_H);
+      // ViewBox: normalize to 0-1 range relative to full map.
+      // Y is inverted: SVG y goes top-down (0=north) but the texture
+      // (with UNPACK_FLIP_Y) has v going bottom-up (0=south, 1=north).
+      gl.uniform4f(u.u_viewBox, vb.x / MAP_W, 1.0 - (vb.y + vb.h) / MAP_H, vb.w / MAP_W, vb.h / MAP_H);
 
       gl.uniform1f(u.u_scale, c.scale);
       gl.uniform1f(u.u_octaves, c.octaves);
