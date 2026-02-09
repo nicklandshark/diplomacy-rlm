@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import GameView from "@/app/game/[gameId]/GameView";
+import MilitaryGameView from "./components/MilitaryGameView";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,6 @@ const MOCK_PHASES = [
 export default function MilitaryDemoPage() {
   const svgContent = getSvgContent();
 
-  // Use the actual GameView component with mock data
-  return <GameView gameId="demo" initialPhases={MOCK_PHASES} svgContent={svgContent} />;
+  // Use the MilitaryGameView component with full military styling
+  return <MilitaryGameView gameId="demo" initialPhases={MOCK_PHASES} svgContent={svgContent} />;
 }
