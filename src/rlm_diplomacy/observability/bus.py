@@ -197,6 +197,33 @@ class BufferedEventBus(EventEmitter):
                 self._new_event.clear()
             return out
 
+    def read_after(self, after_id: int, max_items: int = 200) -> list[ObservableEvent]:
+        """Return events with event_id > *after_id* without removing them.
+
+        Unlike :meth:`poll`, this is non-destructive -- multiple consumers
+        can call ``read_after`` concurrently without interfering with each
+        other. The deque acts as a ring buffer (bounded by *max_events*);
+        old events are naturally evicted when new ones arrive and the buffer
+        is full.
+        """
+        limit = max(1, int(max_items))
+        with self._lock:
+            out: list[ObservableEvent] = []
+            for event in self._events:
+                if event.event_id <= after_id:
+                    continue
+                out.append(event)
+                if len(out) >= limit:
+                    break
+            return out
+
+    def latest_id(self) -> int:
+        """Return the highest ``event_id`` currently in the buffer, or 0."""
+        with self._lock:
+            if self._events:
+                return self._events[-1].event_id
+            return 0
+
     def wait_for_event(self, timeout: float = 0.1) -> bool:
         return self._new_event.wait(timeout=max(0.0, timeout))
 

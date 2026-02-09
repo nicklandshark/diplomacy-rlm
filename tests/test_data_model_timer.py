@@ -53,9 +53,9 @@ def test_game_config_defaults_and_factories() -> None:
     assert config.backend == "anthropic"
     assert config.backend_for("FRANCE") == "anthropic"
     assert config.backend_kwargs["model_name"] == "claude-opus-4-6"
-    assert config.strategize_timeout == 120.0
-    assert config.converse_timeout == 180.0
-    assert config.decide_timeout == 120.0
+    assert config.strategize_timeout == 300.0
+    assert config.converse_timeout == 360.0
+    assert config.decide_timeout == 300.0
     assert config.converse_max_rounds == 5
     assert config.target_response_timeout == 60.0
     assert config.max_year == 1910
@@ -83,7 +83,7 @@ def test_game_config_defaults_and_factories() -> None:
         power_model_overrides={"france": "custom-model"},
     )
     assert override.max_year == 1920
-    assert override.strategize_timeout == 120.0
+    assert override.strategize_timeout == 300.0
     assert override.powers == ["FRANCE", "GERMANY"]
     assert override.backend_kwargs_for("FRANCE")["model_name"] == "custom-model"
     assert "model_name" not in override.backend_kwargs_for("GERMANY")

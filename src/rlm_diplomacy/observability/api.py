@@ -74,7 +74,13 @@ async def state() -> dict[str, Any]:
 
 @app.get("/events/stream")
 async def events_stream(after_id: int = Query(default=0)) -> StreamingResponse:
-    """SSE endpoint that streams events from the BufferedEventBus."""
+    """SSE endpoint that streams events from the BufferedEventBus.
+
+    Uses :meth:`BufferedEventBus.read_after` for non-destructive reads so
+    that multiple SSE clients can connect simultaneously without
+    interfering with each other, and reconnecting clients can resume
+    from where they left off by passing ``after_id``.
+    """
 
     async def generate():
         if _bus is None:
@@ -83,12 +89,10 @@ async def events_stream(after_id: int = Query(default=0)) -> StreamingResponse:
 
         last_id = after_id
         while True:
-            # Poll for new events
-            events = _bus.poll(max_items=50)
+            # Non-destructive read -- does not remove events from the bus
+            events = _bus.read_after(last_id, max_items=50)
             if events:
                 for event in events:
-                    if event.event_id <= last_id:
-                        continue
                     last_id = event.event_id
                     data = json.dumps(_serialize_event(event))
                     yield f"id: {event.event_id}\nevent: game_event\ndata: {data}\n\n"
@@ -96,13 +100,19 @@ async def events_stream(after_id: int = Query(default=0)) -> StreamingResponse:
                 # Send keepalive
                 yield f": keepalive {int(time.time())}\n\n"
 
-            # Wait for new events or timeout
-            await asyncio.sleep(0.5)
-
-            # Check if bus is closed
+            # Check if bus is closed before sleeping
             if _bus._closed:
+                # Drain any final events that arrived before close
+                final_events = _bus.read_after(last_id, max_items=50)
+                for event in final_events:
+                    last_id = event.event_id
+                    data = json.dumps(_serialize_event(event))
+                    yield f"id: {event.event_id}\nevent: game_event\ndata: {data}\n\n"
                 yield f"event: close\ndata: {json.dumps({'reason': 'game_ended'})}\n\n"
                 return
+
+            # Wait for new events or timeout
+            await asyncio.sleep(0.5)
 
     return StreamingResponse(
         generate(),

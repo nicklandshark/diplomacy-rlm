@@ -104,6 +104,7 @@ class Orchestrator:
 
         self.game = Game()
         self._restrict_game_to_controlled_powers()
+        self._adjust_victory_condition()
         self.memory = MemoryManager(str(self.game_dir), event_emitter=self.events)
         self.memory.initialize_all(self.controlled_powers)
         self.router = MessageRouter(
@@ -294,6 +295,30 @@ class Orchestrator:
             power.clear_orders()
             power.goner = 1
         self.game.clear_cache()
+
+    def _adjust_victory_condition(self) -> None:
+        """Lower the victory threshold for games with fewer than 7 active powers.
+
+        Standard Diplomacy requires 18/34 SCs (majority).  With only 2 active
+        powers the board is much smaller effectively, so we scale down to
+        keep the game competitive yet reachable.
+        """
+        n_active = len(self.controlled_powers)
+        if n_active >= 7:
+            return
+        # Count SCs that are actually in play: owned by active powers + neutral
+        active_home_scs = set()
+        for p in self.controlled_powers:
+            power = self.game.powers.get(p)
+            if power:
+                active_home_scs.update(power.centers or [])
+        neutral = [sc for sc in self.game.map.scs if not any(
+            sc in (pw.centers or []) for pw in self.game.powers.values()
+        )]
+        total_in_play = len(active_home_scs) + len(neutral)
+        new_threshold = max(total_in_play // 2 + 1, n_active * 3 + 1)
+        self.game.victory = [new_threshold]
+        self.game.win = new_threshold
 
     def _run_movement_phase(self) -> None:
         phase = self.game.get_current_phase()
@@ -515,7 +540,7 @@ class Orchestrator:
             self._process_incoming_chats(agents, phase)
             self._check_target_timeouts(agents)
 
-            active = [agent for agent in active if not agent.is_finished]
+            active = [agent for agent in agents.values() if not agent.is_finished]
 
         for agent in active:
             agent.force_finish()
@@ -821,33 +846,63 @@ class Orchestrator:
                 continue
             if msg.recipient == GLOBAL:
                 continue
-            if msg.recipient not in agents:
+            recipient_power = msg.recipient
+            if recipient_power not in self.strategists:
                 continue
 
-            recipient_agent = agents[msg.recipient]
             sender = msg.sender.upper()
 
-            if sender in recipient_agent.targets:
-                continue
+            # If the recipient already has an agent, check if sender is already a target
+            if recipient_power in agents:
+                if sender in agents[recipient_power].targets:
+                    continue
 
-            accepted, objective = self.strategists[msg.recipient].notify_incoming_chat(
+            accepted, objective = self.strategists[recipient_power].notify_incoming_chat(
                 sender=sender,
                 message=msg.message,
                 phase=phase,
             )
             self._notified_messages.add(timestamp)
+
             if accepted and objective:
-                recipient_agent.add_target(sender, objective)
+                if recipient_power in agents:
+                    agents[recipient_power].add_target(sender, objective)
+                else:
+                    # Create a reactive conversation agent for this power
+                    self.events.emit(
+                        "conversation.agent.start",
+                        phase=phase,
+                        step="CONVERSE",
+                        power=recipient_power,
+                        payload={
+                            "targets": [sender],
+                            "reactive": True,
+                            "summary": f"{recipient_power} reactive agent for {sender}",
+                        },
+                    )
+                    agent = ConversationAgent(
+                        power_name=recipient_power,
+                        targets=[sender],
+                        objectives={sender: objective},
+                        game=self.game,
+                        memory_snapshot=self.memory.read_snapshot(recipient_power),
+                        router=self.router,
+                        config=self.config,
+                        event_emitter=self.events,
+                    )
+                    agent.bootstrap()
+                    agents[recipient_power] = agent
+
             self.events.emit(
                 "conversation.incoming_chat",
                 phase=phase,
                 step="CONVERSE",
-                power=msg.recipient,
+                power=recipient_power,
                 payload={
                     "sender": sender,
                     "accepted": accepted,
                     "objective": objective or "",
-                    "summary": f"{sender}->{msg.recipient} {'accepted' if accepted else 'declined'}",
+                    "summary": f"{sender}->{recipient_power} {'accepted' if accepted else 'declined'}",
                 },
             )
 
@@ -998,8 +1053,12 @@ class Orchestrator:
         if not snapshot_dir.exists():
             return
         results = self.game.result_history.last_value() if self.game.result_history else {}
+        serializable = {
+            unit: [str(r) for r in result_list]
+            for unit, result_list in results.items()
+        }
         with (snapshot_dir / "results.json").open("w", encoding="utf-8") as f:
-            json.dump(results, f, indent=2, sort_keys=True)
+            json.dump(serializable, f, indent=2, sort_keys=True)
 
     def _log_event(self, event: dict[str, Any]) -> None:
         with self.game_log_path.open("a", encoding="utf-8") as f:

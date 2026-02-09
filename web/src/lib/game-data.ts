@@ -3,7 +3,7 @@ import path from "path";
 import type { GameState, PhaseOrders, PhaseResults, PhaseMessages, Message, GameLogEvent, GameSummary } from "./types";
 
 function getGamesDir(): string {
-  const dir = process.env.GAMES_DIR || "../test_game_outputs";
+  const dir = process.env.GAMES_DIR || "../runs";
   return path.resolve(process.cwd(), dir);
 }
 
@@ -15,7 +15,11 @@ export function listGames(): GameSummary[] {
   const games: GameSummary[] = [];
 
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    // For symlinks, verify the target is a directory
+    if (entry.isSymbolicLink()) {
+      try { if (!fs.statSync(path.join(gamesDir, entry.name)).isDirectory()) continue; } catch { continue; }
+    }
     const gameDir = path.join(gamesDir, entry.name);
     const snapshotsDir = path.join(gameDir, "snapshots");
 
@@ -51,6 +55,8 @@ export function listGames(): GameSummary[] {
     });
   }
 
+  // Natural sort: game1, game2, ..., game9, game10
+  games.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
   return games;
 }
 
@@ -123,6 +129,74 @@ export function readAllMessages(gameId: string): Message[] {
     }
   }
   return all;
+}
+
+export interface GameSummaryData {
+  phases: string[];
+  scHistory: Record<string, number[]>;  // power -> SC count per phase
+  finalStandings: { power: string; scs: number; units: number }[];
+  eliminated: { power: string; phase: string }[];
+  gameOver: boolean;  // true if game ended (victory, halt, or COMPLETED state)
+}
+
+export function readGameSummary(gameId: string): GameSummaryData | null {
+  const phases = listPhases(gameId);
+  if (phases.length === 0) return null;
+
+  const scHistory: Record<string, number[]> = {};
+  const lastAlive: Record<string, string> = {}; // power -> last phase where they had SCs
+
+  for (let pi = 0; pi < phases.length; pi++) {
+    const state = readPhaseState(gameId, phases[pi]);
+    if (!state?.centers) continue;
+    for (const [power, locs] of Object.entries(state.centers)) {
+      if (!scHistory[power]) scHistory[power] = new Array(pi).fill(0);
+      while (scHistory[power].length < pi) scHistory[power].push(0);
+      scHistory[power].push(locs.length);
+      if (locs.length > 0) lastAlive[power] = phases[pi];
+    }
+  }
+
+  // Pad all to same length
+  for (const power of Object.keys(scHistory)) {
+    while (scHistory[power].length < phases.length) scHistory[power].push(0);
+  }
+
+  // Final standings from last phase
+  const lastState = readPhaseState(gameId, phases[phases.length - 1]);
+  const finalStandings = Object.keys(scHistory)
+    .map(power => ({
+      power,
+      scs: scHistory[power][phases.length - 1] || 0,
+      units: (lastState?.units?.[power] as string[] || []).length,
+    }))
+    .sort((a, b) => b.scs - a.scs);
+
+  // Eliminated powers: had SCs at some point but ended with 0
+  const eliminated: { power: string; phase: string }[] = [];
+  for (const power of Object.keys(scHistory)) {
+    const counts = scHistory[power];
+    const hadSCs = counts.some(c => c > 0);
+    const endedZero = counts[counts.length - 1] === 0;
+    if (hadSCs && endedZero) {
+      // Find first phase where they went to 0 and stayed there
+      for (let i = 1; i < counts.length; i++) {
+        if (counts[i] === 0 && counts[i - 1] > 0) {
+          eliminated.push({ power, phase: phases[i] });
+          break;
+        }
+      }
+    }
+  }
+  eliminated.sort((a, b) => phases.indexOf(a.phase) - phases.indexOf(b.phase));
+
+  // Determine if the game is definitively over (victory or engine says COMPLETED)
+  const hasVictor = finalStandings.some(s => s.scs >= 18);
+  const lastPhase = phases[phases.length - 1];
+  const isCompletedPhase = lastPhase === "COMPLETED";
+  const gameOver = hasVictor || isCompletedPhase;
+
+  return { phases, scHistory, finalStandings, eliminated, gameOver };
 }
 
 export function readGameLog(gameId: string): GameLogEvent[] {

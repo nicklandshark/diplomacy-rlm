@@ -9,6 +9,6 @@ export async function GET(
   const data = readPhaseResults(gameId, phase);
   if (!data) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(data, {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": "public, max-age=31536000, immutable" },
   });
 }

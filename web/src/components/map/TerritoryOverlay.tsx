@@ -6,12 +6,15 @@ interface TerritoryOverlayProps {
   svgContainer: HTMLElement | null;
   influence: Record<string, string[]>;
   centers: Record<string, string[]>;
+  /** Extra dependency to force re-application (e.g. after terrain readiness changes the SVG DOM) */
+  refreshKey?: number | boolean;
 }
 
 export default function TerritoryOverlay({
   svgContainer,
   influence,
   centers,
+  refreshKey,
 }: TerritoryOverlayProps) {
   useEffect(() => {
     if (!svgContainer) return;
@@ -56,7 +59,7 @@ export default function TerritoryOverlay({
         });
       }
     }
-  }, [svgContainer, influence, centers]);
+  }, [svgContainer, influence, centers, refreshKey]);
 
   return null;
 }
