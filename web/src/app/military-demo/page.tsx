@@ -12,20 +12,15 @@ import { parseOrder, humanizeOrder } from "@/lib/parse-orders";
 import MemoryViewer from "@/components/memory/MemoryViewer";
 import DiplomacyMap from "@/components/map/DiplomacyMap";
 import DemoControls from "./components/DemoControls";
-
-// Simple panel component for demo structure
-function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`border border-[#2a2a2a] bg-[#1a1a1a] rounded ${className}`}>
-      <div className="border-b border-[#2a2a2a] bg-[#0f0f0f] px-4 py-2">
-        <h2 className="text-xs font-bold tracking-wider text-[#ff9500] uppercase">{title}</h2>
-      </div>
-      <div className="p-4">
-        {children}
-      </div>
-    </div>
-  );
-}
+import {
+  TacticalPanel,
+  CommandButton,
+  OrderItem,
+  MessageBubble,
+  PhaseTimeline,
+  ActionLog,
+  Rivet
+} from "@/app/military-ui-kit/components";
 
 type LeftTab = "orders" | "messages" | "summary";
 
@@ -80,30 +75,32 @@ export default function MilitaryDemoPage() {
         </div>
 
         <div className="mb-4">
-          <Panel title="GAME CONTROL">
+          <TacticalPanel title="GAME CONTROL">
             <div className="flex items-center justify-between">
               <div className="text-[#ff9500] font-bold text-lg">GAME: {DEMO_GAME_ID}</div>
 
               <div className="flex items-center gap-4">
-                <button
+                <CommandButton
+                  variant="secondary"
                   disabled={nav.isFirst}
                   onClick={nav.goPrev}
-                  className="px-4 py-2 bg-[#3a3a3a] border-2 border-[#ff9500] text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="!px-6 !py-2 text-sm"
                 >
                   ◀ PREV
-                </button>
+                </CommandButton>
 
                 <div className="px-4 py-2 bg-[#1a1a1a] border-2 border-[#3a3a3a] font-mono text-sm">
                   {nav.currentPhase || "Loading..."}
                 </div>
 
-                <button
+                <CommandButton
+                  variant="secondary"
                   disabled={nav.isLast}
                   onClick={nav.goNext}
-                  className="px-4 py-2 bg-[#3a3a3a] border-2 border-[#ff9500] text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="!px-6 !py-2 text-sm"
                 >
                   NEXT ▶
-                </button>
+                </CommandButton>
               </div>
 
               <div className="flex items-center gap-2">
@@ -136,14 +133,14 @@ export default function MilitaryDemoPage() {
                 })}
               </div>
             </div>
-          </Panel>
+          </TacticalPanel>
         </div>
 
         {/* Main 3-Column Layout */}
         <div className="grid grid-cols-[320px_1fr_380px] gap-4">
           {/* Left Sidebar */}
           <div className="space-y-4">
-            <Panel title="INTELLIGENCE">
+            <TacticalPanel title="INTELLIGENCE">
               <div className="flex gap-2 mb-4">
                 {(["orders", "messages", "summary"] as LeftTab[]).map(tab => (
                   <button
@@ -178,17 +175,13 @@ export default function MilitaryDemoPage() {
                                     "success";
 
                       return (
-                        <div
+                        <OrderItem
                           key={`${power}-${idx}`}
-                          className={`p-2 border-2 ${
-                            status === "success" ? "border-[#4a7c59] bg-[#4a7c59]/5" :
-                            status === "failed" ? "border-[#dc143c] bg-[#dc143c]/5" :
-                            "border-[#808080] bg-[#808080]/5"
-                          }`}
-                        >
-                          <div className="text-xs text-[#e0e0e0] font-bold">{parsed.loc}</div>
-                          <div className="text-[10px] text-[#808080]">{humanized}</div>
-                        </div>
+                          territory={parsed.loc}
+                          unitType={parsed.unit || ""}
+                          order={humanized}
+                          status={status}
+                        />
                       );
                     })
                   )}
@@ -202,15 +195,13 @@ export default function MilitaryDemoPage() {
                     allMessages
                       .sort((a, b) => a.phase.localeCompare(b.phase))
                       .map((msg, idx) => (
-                        <div key={idx} className="p-2 bg-[#1a1a1a] border-2 border-[#3a3a3a]">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-bold text-[#ff9500]">{msg.sender}</span>
-                            <span className="text-xs text-[#808080]">→</span>
-                            <span className="text-xs font-bold text-[#4a7c59]">{msg.recipient}</span>
-                          </div>
-                          <p className="text-xs text-[#e0e0e0]">{msg.message}</p>
-                          <span className="text-[10px] text-[#808080]">{msg.phase}</span>
-                        </div>
+                        <MessageBubble
+                          key={idx}
+                          from={msg.sender}
+                          to={msg.recipient}
+                          content={msg.message}
+                          timestamp={msg.phase}
+                        />
                       ))
                   ) : (
                     <div className="text-center text-[#808080] text-sm">No messages</div>
@@ -231,12 +222,12 @@ export default function MilitaryDemoPage() {
                   ))}
                 </div>
               )}
-            </Panel>
+            </TacticalPanel>
           </div>
 
           {/* Center Map */}
           <div>
-            <Panel title="TACTICAL MAP">
+            <TacticalPanel title="TACTICAL MAP">
               {svgContent && state ? (
                 <DiplomacyMap
                   svgContent={svgContent}
@@ -250,23 +241,19 @@ export default function MilitaryDemoPage() {
                   <div className="text-[#808080]">Loading map...</div>
                 </div>
               )}
-            </Panel>
+            </TacticalPanel>
           </div>
 
           {/* Right Sidebar */}
           <div className="space-y-4">
-            <Panel title="ACTIVITY FEED">
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {gameLog.map((entry, idx) => (
-                  <div key={idx} className="flex items-start gap-2 py-1 border-b border-[#2a2a2a]">
-                    <div className="text-[10px] text-[#808080] min-w-[45px]">T+{idx}</div>
-                    <div className="text-xs text-[#e0e0e0]">{entry.event}{entry.phase ? ` (${entry.phase})` : ""}</div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
+            <ActionLog
+              actions={gameLog.map((entry, idx) => ({
+                time: `T+${idx}`,
+                message: `${entry.event}${entry.phase ? ` (${entry.phase})` : ""}`
+              }))}
+            />
 
-            <Panel title="MEMORY">
+            <TacticalPanel title="MEMORY">
               <div className="mb-3">
                 <select
                   value={selectedPower || ""}
@@ -282,7 +269,7 @@ export default function MilitaryDemoPage() {
               <div className="max-h-[400px] overflow-y-auto">
                 <MemoryViewer content={memoryContent || ""} />
               </div>
-            </Panel>
+            </TacticalPanel>
           </div>
         </div>
       </div>
