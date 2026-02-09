@@ -38,10 +38,10 @@ export interface TerrainConfig {
 
 export const TERRAIN_DEFAULTS: TerrainConfig = {
   scale: 5,
-  octaves: 6,
-  lacunarity: 2.1,
+  octaves: 8,
+  lacunarity: 2.25,
   persistence: 0.48,
-  ridgeMix: 0.35,
+  ridgeMix: 0.28,
   warpStrength: 0.45,
   seaLevel: -0.02,
   coastSharp: 0.08,
@@ -96,7 +96,7 @@ export const TERRAIN_PRESETS: Record<string, TerrainConfig> = {
     heightmapBlend: 0.8, heightmapScale: 1.2,
   },
   geographic: {
-    scale: 5, octaves: 6, lacunarity: 2.1, persistence: 0.48, ridgeMix: 0.35,
+    scale: 5, octaves: 8, lacunarity: 2.25, persistence: 0.48, ridgeMix: 0.28,
     warpStrength: 0.3, seaLevel: -0.02,
     coastSharp: 0.08, sunAngle: 2.4, sunElev: 0.7, ambient: 0.32, shadowDepth: 0.25,
     specular: 0.8, saturation: 1.0, warmth: 0.02, snowLine: 0.55, oceanDepth: 0.6,
