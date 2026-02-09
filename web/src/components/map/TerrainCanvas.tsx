@@ -79,12 +79,28 @@ const FRAG = `
   float fbm(vec2 p, float rm){
     float v=0., a=.5, f=1., ma=0.;
     int oct=int(u_octaves);
+    mat2 rot=mat2(.8,.6,-.6,.8);
     for(int i=0;i<8;i++){
       if(i>=oct) break;
       float s=snoise(p*f), r=ridgeNoise(p*f);
       v+=a*mix(s,r,rm); ma+=a;
       a*=u_persistence; f*=u_lacunarity;
-      p=mat2(.8,.6,-.6,.8)*p;
+      p=rot*p;
+    }
+    return v/ma;
+  }
+
+  // 3-octave fbm for normal computation — captures the same slope shapes
+  // as the full 8-octave version because the finite-difference epsilon (0.0015)
+  // is too coarse to resolve octaves 4-8 anyway. ~60% fewer snoise calls.
+  float fbm3(vec2 p, float rm){
+    float v=0., a=.5, f=1., ma=0.;
+    mat2 rot=mat2(.8,.6,-.6,.8);
+    for(int i=0;i<3;i++){
+      float s=snoise(p*f), r=ridgeNoise(p*f);
+      v+=a*mix(s,r,rm); ma+=a;
+      a*=u_persistence; f*=u_lacunarity;
+      p=rot*p;
     }
     return v/ma;
   }
@@ -93,14 +109,19 @@ const FRAG = `
     return p+vec2(snoise(p+vec2(1.7,9.2)),snoise(p+vec2(8.3,2.8)))*s;
   }
 
-  // Detect mask boundary gradient — used to attenuate warp near coastlines
-  float maskEdgeFade(vec2 uv){
-    float s = 0.004;
-    float maskGrad = length(vec2(
-      texture2D(u_mask, uv + vec2(s, 0.)).b - texture2D(u_mask, uv - vec2(s, 0.)).b,
-      texture2D(u_mask, uv + vec2(0., s)).b - texture2D(u_mask, uv - vec2(0., s)).b
-    ));
-    return 1.0 - smoothstep(0.0, 0.3, maskGrad * 5.0);
+  // Mask gradient — single pass computes both edge fade (warp attenuation)
+  // and coast proximity (water shading). Returns vec2(edgeFade, coastDist).
+  // Saves 4 texture reads vs separate passes.
+  vec2 maskGradient(vec2 uv){
+    float s = 0.006;
+    float bR = texture2D(u_mask, uv + vec2(s, 0.)).b;
+    float bL = texture2D(u_mask, uv - vec2(s, 0.)).b;
+    float bU = texture2D(u_mask, uv + vec2(0., s)).b;
+    float bD = texture2D(u_mask, uv - vec2(0., s)).b;
+    float grad = length(vec2(bR - bL, bU - bD));
+    float edgeFade = 1.0 - smoothstep(0.0, 0.3, grad * 5.0);
+    float coastDist = 1.0 - grad * 3.0;
+    return vec2(edgeFade, coastDist);
   }
 
   float erosionDetail(vec2 p){
@@ -110,117 +131,142 @@ const FRAG = `
     return sqrt(dx*dx+dy*dy)*8.;
   }
 
-  // Regional terrain color — blends based on map-space UV for geographic tinting
+  // Geographic biome terrain color.
+  // mapUV: x=0 west(Atlantic), x=1 east(Armenia); y=0 south(Africa), y=1 north(Barents).
+  // Uses normalized land elevation so full gradient works at any seaLevel.
   vec3 terrainColor(float h, float er, vec2 p, vec2 mapUV){
-    vec3 dO=vec3(.02,.04,.10), oc=vec3(.04,.08,.18), ss=vec3(.07,.13,.26);
-    vec3 co=vec3(.45,.42,.35), lg=vec3(.22,.32,.15), gr=vec3(.28,.38,.18);
-    vec3 fo=vec3(.18,.28,.12), hl=vec3(.38,.34,.24), rk=vec3(.42,.40,.36);
-    vec3 sn=vec3(.78,.76,.72);
-    float sl=u_seaLevel; vec3 c;
-    if(h<sl-.25) c=mix(dO,oc,clamp((h-(sl-.5))/.25,0.,1.));
-    else if(h<sl-.03) c=mix(oc,ss,clamp((h-(sl-.25))/.22,0.,1.));
-    else if(h<sl+u_coastSharp) c=mix(ss,co,clamp((h-(sl-.03))/(u_coastSharp+.03),0.,1.));
-    else if(h<sl+.12) c=mix(co,lg,clamp((h-(sl+u_coastSharp))/(.12-u_coastSharp),0.,1.));
-    else if(h<sl+.25){
-      float fm=snoise(p*20.)*.5+.5;
-      c=mix(lg,mix(gr,fo,fm*.6),clamp((h-(sl+.12))/.13,0.,1.));
-    } else if(h<u_snowLine-.1){
-      float fm=snoise(p*15.+vec2(3.))*.5+.5;
-      c=mix(mix(gr,fo,fm*.5),hl,clamp((h-(sl+.25))/(u_snowLine-.1-sl-.25),0.,1.));
-    } else if(h<u_snowLine) c=mix(hl,rk,clamp((h-(u_snowLine-.1))/.1,0.,1.));
-    else{
-      float sm=clamp((h-u_snowLine)/.15,0.,1.);
-      float sn2=snoise(p*30.)*.3+.5;
-      sm*=smoothstep(.2,.6,sm+sn2*.3);
-      c=mix(rk,sn,sm);
-    }
-    if(h>sl) c*=1.-er*u_erosion*.3;
+    float sl=u_seaLevel;
+    // Normalize land height to 0-1 so color bands aren't crushed by high seaLevel
+    float landH=clamp((h-sl)/max(1.0-sl,0.25),0.,1.);
 
-    // Regional color tinting based on geographic position
-    // Southern (Mediterranean): warmer olive/golden
-    float southTint = smoothstep(0.55, 0.85, mapUV.y);
-    c = mix(c, c * vec3(1.08, 1.02, 0.88), southTint * 0.4);
+    // Noise for texture variety within biomes
+    mat2 nr=mat2(.8,.6,-.6,.8);
+    float n1=snoise(nr*(p*10.))*.5+.5;
+    float n2=snoise(nr*(p*20.+vec2(5.,3.)))*.5+.5;
 
-    // Northern (Scandinavian): cooler grey-green/blue
-    float northTint = smoothstep(0.35, 0.10, mapUV.y);
-    c = mix(c, c * vec3(0.90, 0.95, 1.05), northTint * 0.35);
+    // === ELEVATION-BASED PALETTE (vivid greens and browns) ===
+    vec3 coast=vec3(.48,.46,.38);
+    vec3 lowG=vec3(.28,.42,.20);
+    vec3 richG=vec3(.22,.38,.15);
+    vec3 forest=vec3(.15,.28,.10);
+    vec3 highG=vec3(.38,.35,.24);
+    vec3 rock=vec3(.46,.43,.38);
+    vec3 snow=vec3(.80,.78,.74);
 
-    // Eastern (Russian steppe): golden/brown
-    float eastTint = smoothstep(0.60, 0.85, mapUV.x) * smoothstep(0.55, 0.30, mapUV.y);
-    c = mix(c, c * vec3(1.06, 1.0, 0.88), eastTint * 0.3);
+    vec3 c;
+    if(landH<.06) c=mix(coast,lowG,landH/.06);
+    else if(landH<.22){
+      float t=(landH-.06)/.16;
+      c=mix(lowG,mix(richG,forest,n1*.5),t);
+    } else if(landH<.50){
+      float t=(landH-.22)/.28;
+      c=mix(mix(richG,forest,n1*.6+n2*.3),highG,t*t);
+    } else if(landH<.72){
+      float t=(landH-.50)/.22;
+      c=mix(highG,rock,t);
+    } else if(landH<u_snowLine){
+      float t=clamp((landH-.72)/(u_snowLine-.72),0.,1.);
+      float sn2=snoise(p*28.)*.3+.5;
+      c=mix(rock,snow,t*smoothstep(.25,.65,t+sn2*.2));
+    } else c=snow;
+
+    c*=1.-er*u_erosion*.2;
+
+    // === GEOGRAPHIC BIOME TINTING (strong, map-appropriate) ===
+    // Y=0 south, Y=1 north; X=0 west, X=1 east
+
+    // Mediterranean (south): warm golden olive
+    float med=smoothstep(.35,.10,mapUV.y);
+    c=mix(c,vec3(.42,.38,.22)*(0.7+landH*0.5),med*0.55);
+
+    // Atlantic West (England, France): lush green
+    float westLush=smoothstep(.35,.12,mapUV.x)*smoothstep(.25,.55,mapUV.y)*smoothstep(.75,.55,mapUV.y);
+    c=mix(c,c*vec3(.82,1.18,.78),westLush*0.5);
+
+    // Scandinavian (far north): dark cool coniferous
+    float scandi=smoothstep(.65,.82,mapUV.y)*smoothstep(.18,.45,mapUV.x)*smoothstep(.65,.45,mapUV.x);
+    c=mix(c,vec3(.12,.20,.12)*(0.7+landH*0.5),scandi*0.55);
+
+    // Russian steppe (east): golden brown
+    float steppe=smoothstep(.55,.82,mapUV.x)*smoothstep(.20,.45,mapUV.y)*smoothstep(.70,.50,mapUV.y);
+    c=mix(c,c*vec3(1.15,1.02,.72),steppe*0.55);
+
+    // Central Europe: moderate temperate green
+    float central=max(0.,1.-length((mapUV-vec2(.38,.48))*vec2(3.5,4.)));
+    c=mix(c,c*vec3(.88,1.10,.85),central*0.3);
+
+    // Micro-texture — high-frequency luminance grain adds perceived detail
+    // without extra fbm octaves. Two cheap snoise calls at 45x and 85x scale.
+    float micro = snoise(p * 45.) * 0.04 + snoise(p * 85.) * 0.02;
+    c *= 1.0 + micro;
 
     return c;
   }
 
-  // Geographic water color — varies by region
+  // Geographic water color — calm satellite-view ocean.
+  // Restrained animation: subtle depth variation dominates, movement is barely perceptible.
+  // Three decorrelated rotations prevent simplex lattice artifacts.
   vec3 waterColor(float h, vec2 p, vec2 mapUV, float coastDist){
     float sl=u_seaLevel, d=clamp((sl-h)/(u_oceanDepth*.5),0.,1.);
-    vec3 b=mix(vec3(.06,.10,.22),vec3(.01,.02,.05),d*d);
+    // Dark base — shallow dusky blue to abyssal near-black
+    vec3 shallow=vec3(.06,.10,.22);
+    vec3 deep=vec3(.012,.022,.06);
+    vec3 b=mix(shallow,deep,d*d);
 
-    // Mediterranean: warmer, slightly more teal
-    float medBlend = smoothstep(0.65, 0.85, mapUV.y) * smoothstep(0.15, 0.35, mapUV.x) * smoothstep(0.75, 0.55, mapUV.x);
-    b = mix(b, vec3(.04, .08, .20) * (1.0 - d * 0.5), medBlend * 0.5);
+    // Mediterranean (south): slightly warmer blue
+    float medBlend = smoothstep(0.35, 0.10, mapUV.y) * smoothstep(0.15, 0.35, mapUV.x) * smoothstep(0.75, 0.55, mapUV.x);
+    b = mix(b, vec3(.05, .08, .18) * (1.0 - d * 0.4), medBlend * 0.4);
 
-    // North Sea / Baltic: colder, greyer
-    float northBlend = smoothstep(0.40, 0.20, mapUV.y) * smoothstep(0.25, 0.55, mapUV.x);
-    b = mix(b, vec3(.04, .06, .12) * (1.0 - d * 0.4), northBlend * 0.4);
+    // North Sea / Baltic: colder steel
+    float northBlend = smoothstep(0.60, 0.80, mapUV.y) * smoothstep(0.25, 0.55, mapUV.x);
+    b = mix(b, vec3(.04, .05, .10) * (1.0 - d * 0.3), northBlend * 0.35);
 
-    // Atlantic deep: darkest
+    // Atlantic deep
     float atlBlend = smoothstep(0.25, 0.05, mapUV.x);
-    b = mix(b, vec3(.01, .02, .06), atlBlend * 0.5 * d);
+    b = mix(b, vec3(.008, .016, .04), atlBlend * 0.4 * d);
 
-    // Coastal glow — lighter water near land
-    float coastGlow = smoothstep(0.12, 0.0, coastDist);
-    b += vec3(0.015, 0.025, 0.04) * coastGlow * (1.0 - d * 0.5);
+    // Coastal glow — narrow, subtle lightening near land
+    float coastGlow = smoothstep(0.08, 0.0, coastDist);
+    b += vec3(.012, .020, .035) * coastGlow * (1.0 - d * 0.5);
 
-    // Animated water — rotated domains break simplex lattice rings
-    float an=u_time*.02*u_waterAnim;
-    mat2 rot=mat2(.8,.6,-.6,.8);
+    // Decorrelated rotation matrices
+    float an=u_time*.03*u_waterAnim;
+    mat2 r1=mat2(.80,.60,-.60,.80);  // ~37°
+    mat2 r2=mat2(.60,.80,-.80,.60);  // ~53°
+    mat2 r3=mat2(.95,.31,-.31,.95);  // ~18°
 
-    // Slow, broad swell — gentle luminance undulation across the ocean
-    float swell=snoise(rot*(p*3.5)+vec2(an*.4,an*.25))*.5+.5;
-    swell+=snoise(rot*(p*6.2)+vec2(-an*.3,an*.5))*.25;
-    b+=vec3(.008,.014,.028)*swell*(1.-d*.6)*u_waterAnim;
+    // Broad swell — gentle rolling luminance that drifts visibly
+    float swell=snoise(r1*(p*3.0)+vec2(an*.35,an*.22))*.5+.5;
+    swell+=snoise(r1*(p*5.5)+vec2(-an*.25,an*.4))*.25;
+    b+=vec3(.007,.012,.024)*swell*(1.-d*.5)*u_waterAnim;
 
-    // Fine caustic sparkle
-    float c1=snoise(rot*(p*14.)+vec2(an,an*.7))*.5+.5;
-    float c2=snoise(rot*(p*21.3)+vec2(-an*.5,an*1.1))*.5+.5;
-    float ca=c1*c2;
-    b+=vec3(.006,.012,.025)*ca*(1.-d)*u_waterAnim;
+    // Caustics — abs-fold filaments, visible near coasts, fade in deep water
+    float ca1=abs(snoise(r2*(p*14.)+vec2(an*.9,-an*.55)));
+    float ca2=abs(snoise(r2*(p*20.)+vec2(-an*.6,an*1.0)));
+    float ca=pow(min(ca1,ca2), 0.75);
+    b+=vec3(.008,.015,.030)*ca*(1.-d*.7)*u_waterAnim;
 
-    // Micro ripple texture
-    vec2 rp=rot*(p*32.7+vec2(an*1.2,0.));
-    float w=snoise(rp)*.010*(1.-d);
-    b+=vec3(w*.4,w*.6,w);
+    // Micro ripple — animated fine grain
+    float w=snoise(r3*(p*28.+vec2(an*.9,-an*.4)))*.008*(1.-d);
+    b+=vec3(w*.4,w*.7,w);
     return b;
   }
 
   vec3 adjSat(vec3 c, float s){float g=dot(c,vec3(.299,.587,.114)); return mix(vec3(g),c,s);}
 
-  // Sample height at a point (for normal computation)
-  // When heightmapBlend > 0.5, uses heightmap for faster normals
+  // Height sample for normal computation — uses fbm3 (3 octaves) with the same
+  // warp pipeline as main(). The finite-difference epsilon is 0.0015 which is too
+  // coarse to resolve octaves 4-8, so 3 octaves produce identical lighting slopes.
   float sampleH(vec2 p, vec2 uv, float edgeFade){
     vec4 m = texture2D(u_mask, uv);
     float landMask = max(step(0.05, m.r), step(0.5, m.g));
     float impassMask = step(0.5, m.g);
-
-    // Heightmap-based height
     float realH = texture2D(u_heightmap, uv).r * u_heightmapScale;
 
-    float h;
-    if(u_heightmapBlend > 0.5){
-      // Heightmap-accelerated: skip expensive fbm for normals
-      h = mix(realH, realH, 1.0); // placeholder for procedural residual
-      // Add some fine noise detail even in heightmap mode
-      vec2 wp = warp(p * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15 * edgeFade * 0.3);
-      float detail = snoise(wp * 4.0) * 0.05;
-      h = realH + detail * (1.0 - u_heightmapBlend);
-    } else {
-      vec2 wp=warp(p*u_scale*.5+vec2(1.7,3.2),u_warpStrength*.15*edgeFade);
-      wp=warp(wp,u_warpStrength*.08*edgeFade);
-      float procH = fbm(wp,u_ridgeMix);
-      h = mix(procH, realH, u_heightmapBlend);
-    }
+    vec2 wp=warp(p*u_scale*.5+vec2(1.7,3.2),u_warpStrength*.15*edgeFade);
+    wp=warp(wp,u_warpStrength*.08*edgeFade);
+    float procH = fbm3(wp,u_ridgeMix);
+    float h = mix(procH, realH, u_heightmapBlend);
 
     h = h * .65 + landMask * .45 - .1;
     h += impassMask * 0.15;
@@ -241,8 +287,10 @@ const FRAG = `
     float landMask = max(step(0.05, powerIdx), step(0.5, impassMask));
     float combinedLand = landMask;
 
-    // Compute mask edge fade for warp attenuation near coastlines
-    float edgeFade = maskEdgeFade(uv);
+    // Mask gradient — edge fade + coast proximity in one pass (4 texture reads)
+    vec2 mg = maskGradient(uv);
+    float edgeFade = mg.x;
+    float coastDist = mg.y;
 
     // Domain warp — attenuated near mask boundaries
     vec2 wp=warp(p*u_scale*.5+vec2(1.7,3.2),u_warpStrength*.15*edgeFade);
@@ -275,13 +323,6 @@ const FRAG = `
     float shd=1.-u_shadowDepth*max(0.,-dot(N,L));
     float lit=u_ambient+(1.-u_ambient)*diff*shd;
 
-    // Coastal distance approximation for water shading
-    // Uses mask gradient magnitude as proxy for proximity to land
-    float coastProximity = length(vec2(
-      texture2D(u_mask, uv + vec2(0.008, 0.)).b - texture2D(u_mask, uv - vec2(0.008, 0.)).b,
-      texture2D(u_mask, uv + vec2(0., 0.008)).b - texture2D(u_mask, uv - vec2(0., 0.008)).b
-    ));
-
     vec3 color;
     float sl=u_seaLevel;
 
@@ -295,31 +336,32 @@ const FRAG = `
     else h = max(h, sl + 0.01);
 
     if(isWater){
-      color=waterColor(h,p,mapUV,1.0-coastProximity*3.0);
+      color=waterColor(h,p,mapUV,coastDist);
+      // Specular — visible glints that shimmer with wave motion
       vec3 hd=normalize(L+vec3(0.,0.,1.));
       float an=u_time*.03*u_waterAnim;
       mat2 wr=mat2(.8,.6,-.6,.8);
-      vec2 wnp=wr*(p*22.+vec2(an*.7,an*.3));
-      vec3 wn=N; wn.x+=snoise(wnp)*.015; wn.y+=snoise(wnp+vec2(5.3,1.7))*.015; wn=normalize(wn);
-      float sp=pow(max(dot(wn,hd),0.),20.);
+      vec2 wnp=wr*(p*18.+vec2(an*.8,an*.4));
+      vec3 wn=N; wn.x+=snoise(wnp)*.008; wn.y+=snoise(wnp+vec2(5.3,1.7))*.008; wn=normalize(wn);
+      float sp=pow(max(dot(wn,hd),0.),40.);
       float d=clamp((sl-h)/(u_oceanDepth*.5),0.,1.);
-      color+=vec3(.6,.7,.9)*sp*u_specular*.15*(1.-d*.5);
+      color+=vec3(.5,.6,.85)*sp*u_specular*.10*(1.-d*.5);
     } else {
       vec3 tc=terrainColor(h,er,p,mapUV)*lit;
       float ao=1.-clamp((h-hL+h-hR+h-hU+h-hD)*-2.,0.,.3);
       tc*=ao;
-      // AoH2-style power tinting — decode power from mask R channel
+      // Subtle power tinting — biome colors dominate, power is a gentle hue shift
       vec3 pt;
-      if(powerIdx>0.85) pt=vec3(0.78,0.70,0.25);       // turkey - golden
-      else if(powerIdx>0.75) pt=vec3(0.52,0.56,0.68);   // russia - steel
-      else if(powerIdx>0.65) pt=vec3(0.35,0.60,0.30);   // italy - green
-      else if(powerIdx>0.55) pt=vec3(0.62,0.55,0.42);   // germany - khaki
-      else if(powerIdx>0.45) pt=vec3(0.38,0.48,0.78);   // france - blue
-      else if(powerIdx>0.35) pt=vec3(0.58,0.32,0.68);   // england - purple
-      else if(powerIdx>0.25) pt=vec3(0.78,0.40,0.35);   // austria - red
-      else if(powerIdx>0.15) pt=vec3(0.70,0.65,0.55);   // nopower - tan
-      else pt=vec3(0.60,0.58,0.52);                      // neutral - grey
-      color=mix(tc, pt*lit*ao, 0.45);
+      if(powerIdx>0.85) pt=vec3(1.05,0.98,0.75);       // turkey - warm gold shift
+      else if(powerIdx>0.75) pt=vec3(0.88,0.90,1.05);   // russia - cool steel shift
+      else if(powerIdx>0.65) pt=vec3(0.85,1.08,0.82);   // italy - green boost
+      else if(powerIdx>0.55) pt=vec3(1.02,0.98,0.88);   // germany - warm khaki shift
+      else if(powerIdx>0.45) pt=vec3(0.88,0.92,1.10);   // france - blue shift
+      else if(powerIdx>0.35) pt=vec3(0.98,0.88,1.05);   // england - purple shift
+      else if(powerIdx>0.25) pt=vec3(1.08,0.90,0.88);   // austria - red shift
+      else if(powerIdx>0.15) pt=vec3(1.0,0.98,0.95);    // nopower - slight warm
+      else pt=vec3(0.95,0.95,0.95);                      // neutral - slight desaturate
+      color=tc*pt;
     }
 
     color.r+=u_warmth*.08; color.b-=u_warmth*.05;
@@ -336,9 +378,10 @@ const FRAG = `
     color=color/(color+.5)*1.4;
     color=pow(max(color,0.),vec3(1./2.2));
 
-    // Darken land areas — territory fills paint on top.
+    // Darken land slightly — territory fills paint on top via SVG overlay.
+    // Keep at 0.82 so biome colors remain visible through semi-transparent fills.
     if(!isWater){
-      color*=0.75;
+      color*=0.82;
     }
 
     gl_FragColor=vec4(color,1.);
@@ -374,6 +417,7 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
   const glRef = useRef<WebGLRenderingContext | null>(null);
   const uniformsRef = useRef<Record<string, WebGLUniformLocation | null>>({});
   const rafRef = useRef<number>(0);
+  const lastDrawRef = useRef(0);
   const configRef = useRef<TerrainConfig>({ ...TERRAIN_DEFAULTS, ...config });
   const maskReadyRef = useRef(false);
   const heightmapReadyRef = useRef(false);
@@ -472,9 +516,16 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
         return;
       }
 
-      // Resize canvas to match CSS size at device pixel ratio
+      // 30fps cap — painterly terrain doesn't benefit from 60fps
+      if (t - lastDrawRef.current < 33) {
+        rafRef.current = requestAnimationFrame(render);
+        return;
+      }
+      lastDrawRef.current = t;
+
+      // 1x DPR — terrain is painterly, retina resolution wastes 4x GPU for no visible gain
       const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = 1;
       const w = Math.round(rect.width * dpr);
       const h = Math.round(rect.height * dpr);
       if (canvas.width !== w || canvas.height !== h) {
