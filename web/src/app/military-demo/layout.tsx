@@ -11,14 +11,22 @@ export default function MilitaryDemoLayout({ children }: { children: React.React
       if (typeof window !== "undefined") {
         const { worker } = await import("./mocks/browser");
         await worker.start({
-          onUnhandledRequest: "bypass", // Don't warn about unhandled requests
-          quiet: false, // Log MSW activity for debugging
+          serviceWorker: {
+            url: "/mockServiceWorker.js",
+          },
+          onUnhandledRequest: "warn", // Warn about unhandled requests for debugging
+          quiet: false, // Log all MSW activity
         });
+        console.log("[MSW] Service worker started successfully");
         setMswReady(true);
       }
     };
 
-    startMSW();
+    startMSW().catch((err) => {
+      console.error("[MSW] Failed to start:", err);
+      // Start anyway to not block the app
+      setMswReady(true);
+    });
   }, []);
 
   if (!mswReady) {
