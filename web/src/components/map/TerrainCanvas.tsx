@@ -173,14 +173,25 @@ const FRAG = `
     float coastGlow = smoothstep(0.12, 0.0, coastDist);
     b += vec3(0.015, 0.025, 0.04) * coastGlow * (1.0 - d * 0.5);
 
-    // Animated caustics
-    float an=u_time*.03*u_waterAnim;
-    float c1=snoise(p*18.+vec2(an,an*.7))*.5+.5;
-    float c2=snoise(p*25.-vec2(an*.5,an*1.1))*.5+.5;
-    float ca=c1*c2; ca*=ca;
-    b+=vec3(.015,.025,.05)*ca*(1.-d)*u_waterAnim;
-    float w=snoise(p*40.+vec2(an*2.,0.))*.02*(1.-d);
-    b+=vec3(w*.5,w*.7,w);
+    // Animated water — rotated domains break simplex lattice rings
+    float an=u_time*.02*u_waterAnim;
+    mat2 rot=mat2(.8,.6,-.6,.8);
+
+    // Slow, broad swell — gentle luminance undulation across the ocean
+    float swell=snoise(rot*(p*3.5)+vec2(an*.4,an*.25))*.5+.5;
+    swell+=snoise(rot*(p*6.2)+vec2(-an*.3,an*.5))*.25;
+    b+=vec3(.008,.014,.028)*swell*(1.-d*.6)*u_waterAnim;
+
+    // Fine caustic sparkle
+    float c1=snoise(rot*(p*14.)+vec2(an,an*.7))*.5+.5;
+    float c2=snoise(rot*(p*21.3)+vec2(-an*.5,an*1.1))*.5+.5;
+    float ca=c1*c2;
+    b+=vec3(.006,.012,.025)*ca*(1.-d)*u_waterAnim;
+
+    // Micro ripple texture
+    vec2 rp=rot*(p*32.7+vec2(an*1.2,0.));
+    float w=snoise(rp)*.010*(1.-d);
+    b+=vec3(w*.4,w*.6,w);
     return b;
   }
 
@@ -287,8 +298,10 @@ const FRAG = `
       color=waterColor(h,p,mapUV,1.0-coastProximity*3.0);
       vec3 hd=normalize(L+vec3(0.,0.,1.));
       float an=u_time*.03*u_waterAnim;
-      vec3 wn=N; wn.x+=snoise(p*30.+vec2(an))*.02; wn.y+=snoise(p*30.+vec2(0.,an))*.02; wn=normalize(wn);
-      float sp=pow(max(dot(wn,hd),0.),40.);
+      mat2 wr=mat2(.8,.6,-.6,.8);
+      vec2 wnp=wr*(p*22.+vec2(an*.7,an*.3));
+      vec3 wn=N; wn.x+=snoise(wnp)*.015; wn.y+=snoise(wnp+vec2(5.3,1.7))*.015; wn=normalize(wn);
+      float sp=pow(max(dot(wn,hd),0.),20.);
       float d=clamp((sl-h)/(u_oceanDepth*.5),0.,1.);
       color+=vec3(.6,.7,.9)*sp*u_specular*.15*(1.-d*.5);
     } else {
