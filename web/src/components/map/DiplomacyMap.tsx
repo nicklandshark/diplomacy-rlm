@@ -367,6 +367,8 @@ export default function DiplomacyMap({
       svg.setAttribute("viewBox", `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`);
       svg.setAttribute("width", "100%");
       svg.setAttribute("height", "100%");
+      // Stretch SVG to fill exact same pixel area as terrain canvas (eliminates sub-pixel drift)
+      svg.setAttribute("preserveAspectRatio", showTerrain && terrainReady ? "none" : "xMidYMid meet");
       svg.style.cursor = isPanning ? "grabbing" : "grab";
       // When terrain is ready, make SVG background transparent so WebGL canvas shows
       if (showTerrain && terrainReady) {

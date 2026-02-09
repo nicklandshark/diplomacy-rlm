@@ -26,20 +26,24 @@
    shows through land areas. Water is transparent so the terrain ocean
    shader shows through directly. */
 .terrain-svg-layer {
-  position: relative;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1;
 }
 
-/* Territory fills — muted, slightly transparent so terrain texture peeks through */
-.terrain-active .austria { fill: rgba(180, 70, 55, 0.88) !important; }
-.terrain-active .england { fill: rgba(140, 70, 170, 0.88) !important; }
-.terrain-active .france { fill: rgba(65, 100, 165, 0.88) !important; }
-.terrain-active .germany { fill: rgba(160, 130, 70, 0.88) !important; }
-.terrain-active .italy { fill: rgba(60, 130, 60, 0.88) !important; }
-.terrain-active .russia { fill: rgba(150, 145, 130, 0.85) !important; }
-.terrain-active .turkey { fill: rgba(150, 135, 50, 0.88) !important; }
-.terrain-active .neutral { fill: rgba(70, 72, 78, 0.75) !important; }
-.terrain-active .nopower { fill: rgba(55, 58, 65, 0.70) !important; }
+/* Territory fills — reduced opacity (0.82) for better terrain visibility.
+   Terrain canvas land darkening raised to 0.75 to compensate. */
+.terrain-active .austria { fill: rgba(180, 70, 55, 0.82) !important; }
+.terrain-active .england { fill: rgba(140, 70, 170, 0.82) !important; }
+.terrain-active .france { fill: rgba(65, 100, 165, 0.82) !important; }
+.terrain-active .germany { fill: rgba(160, 130, 70, 0.82) !important; }
+.terrain-active .italy { fill: rgba(60, 130, 60, 0.82) !important; }
+.terrain-active .russia { fill: rgba(150, 145, 130, 0.78) !important; }
+.terrain-active .turkey { fill: rgba(150, 135, 50, 0.82) !important; }
+.terrain-active .neutral { fill: rgba(70, 72, 78, 0.70) !important; }
+.terrain-active .nopower { fill: rgba(55, 58, 65, 0.65) !important; }
 /* Water: transparent → terrain ocean shader shows through */
 .terrain-active .water { fill: transparent !important; stroke: rgba(30, 50, 100, 0.3) !important; }
 /* Impassable: semi-transparent to reveal mountainous terrain */
