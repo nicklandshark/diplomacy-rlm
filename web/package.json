@@ -24,6 +24,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "msw": "^2.12.9",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.0.18"
@@ -35,5 +36,10 @@
   "trustedDependencies": [
     "sharp",
     "unrs-resolver"
-  ]
+  ],
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
 }
