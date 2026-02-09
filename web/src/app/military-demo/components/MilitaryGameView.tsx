@@ -241,17 +241,17 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
       </TacticalPanel>
 
       {/* Main 3-Column Layout */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="flex gap-3 flex-1 min-h-0">
         {/* Left Sidebar: Orders/Messages/Summary */}
-        <div className="w-72 flex-shrink-0 flex flex-col gap-4 min-h-0">
+        <div className="w-64 min-w-[240px] flex-shrink flex flex-col gap-3 min-h-0">
           <TacticalPanel title="INTELLIGENCE" className="flex-1 min-h-0 flex flex-col">
             {/* Tab Buttons */}
-            <div className="flex gap-1 mb-4">
+            <div className="flex gap-1 mb-3">
               {(["orders", "messages", "summary"] as LeftTab[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setLeftTab(tab)}
-                  className={`flex-1 px-3 py-2 text-xs font-bold uppercase tracking-wider border-2 transition-all ${
+                  className={`flex-1 px-2 py-2 text-[11px] font-bold uppercase tracking-wide border-2 transition-all ${
                     leftTab === tab
                       ? "bg-[#ff9500] border-[#ff9500] text-[#0a0a0a]"
                       : "bg-[#3a3a3a] border-[#3a3a3a] text-[#ff9500] hover:border-[#ff9500]/50"
@@ -369,7 +369,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
 
         {/* Center: Map */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-w-0 min-h-0">
           <TacticalPanel title="TACTICAL MAP" className="h-full">
             {svgContent && state ? (
               <DiplomacyMap
@@ -389,7 +389,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
 
         {/* Right Sidebar: Activity + Memory */}
-        <div className="w-72 flex-shrink-0 flex flex-col gap-4 min-h-0">
+        <div className="w-64 min-w-[240px] flex-shrink flex flex-col gap-3 min-h-0">
           {/* Activity Feed */}
           <ActionLog
             actions={gameLog.map((entry, idx) => ({
