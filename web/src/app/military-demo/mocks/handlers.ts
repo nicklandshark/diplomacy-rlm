@@ -1,6 +1,7 @@
 // web/src/app/military-demo/mocks/handlers.ts
 import { http, HttpResponse } from 'msw';
 import { fixtures } from './fixtures/game-data';
+import { createSSEHandler } from './sse-handler';
 
 export const handlers = [
   // Phases list
@@ -61,4 +62,7 @@ export const handlers = [
 
     return HttpResponse.json(allMessages);
   }),
+
+  // SSE event stream
+  createSSEHandler(),
 ];
