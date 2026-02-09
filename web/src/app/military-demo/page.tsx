@@ -10,6 +10,7 @@ import { useGameLog } from "@/hooks/useGameLog";
 import { parseOrder, humanizeOrder } from "@/lib/parse-orders";
 import MemoryViewer from "@/components/memory/MemoryViewer";
 import DiplomacyMap from "@/components/map/DiplomacyMap";
+import DemoControls from "./components/DemoControls";
 
 // Simple panel component for demo structure
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
@@ -44,6 +45,7 @@ export default function MilitaryDemoPage() {
   );
   const [hoveredTerritory, setHoveredTerritory] = useState<string | null>(null);
   const [svgContent, setSvgContent] = useState<string>("");
+  const [simSpeed, setSimSpeed] = useState(1);
 
   useEffect(() => {
     fetch("/diplomacy_map.svg")
@@ -51,10 +53,27 @@ export default function MilitaryDemoPage() {
       .then(setSvgContent);
   }, []);
 
+  const handleReset = () => {
+    nav.jumpTo(0);
+    setDataRefreshKey(k => k + 1);
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#e0e0e0] p-4">
       <div className="max-w-[1920px] mx-auto">
         {/* Top Navigation */}
+        <div className="mb-4">
+          <DemoControls
+            speed={simSpeed}
+            onSpeedChange={setSimSpeed}
+            onReset={handleReset}
+            onTriggerOrder={() => console.log("Trigger order")}
+            onTriggerMessage={() => console.log("Trigger message")}
+            onTriggerMemory={() => console.log("Trigger memory")}
+            onTriggerPhase={() => console.log("Trigger phase")}
+          />
+        </div>
+
         <div className="mb-4">
           <Panel title="GAME CONTROL">
             <div className="flex items-center justify-between">
