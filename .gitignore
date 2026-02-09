@@ -10,3 +10,6 @@ test_game_outputs/
 
 # Environment variables
 .env
+
+# Git worktrees
+.worktrees/
