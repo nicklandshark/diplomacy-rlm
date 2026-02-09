@@ -103,6 +103,10 @@ export async function POST(request: Request) {
     const projectRoot = getProjectRoot();
     const gameDir = path.join(runsDir, gameId);
 
+    // Ensure game directory exists before writing metadata files.
+    // The CLI also creates it, but we need it now for .pid and .game_meta.json.
+    fs.mkdirSync(gameDir, { recursive: true });
+
     // Build CLI arguments
     const args = [
       "run",
