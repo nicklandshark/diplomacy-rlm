@@ -16,7 +16,7 @@ export function useAllMessages(gameId: string, refreshKey: number = 0) {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/games/${gameId}/messages`, { cache: "no-store" })
+    fetch(`/api/games/${gameId}/messages`)
       .then((r) => (r.ok ? r.json() : []))
       .then((data: Message[]) => {
         if (!cancelled) {

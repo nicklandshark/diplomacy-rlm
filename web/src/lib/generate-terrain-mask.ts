@@ -6,7 +6,13 @@
  * Green channel = impassable (Switzerland, etc.)
  *
  * The resulting canvas can be uploaded directly to WebGL via texImage2D.
+ *
+ * Uses IndexedDB caching — the SVG content is hashed and the rasterized
+ * ImageData is stored. On cache hit, skips the full rasterization (~150ms)
+ * and returns in <5ms.
  */
+
+import { getCachedImageData, setCachedImageData, hashString } from "./texture-cache";
 
 const MASK_WIDTH = 2048;
 // Maintain aspect ratio: SVG viewBox is 1835 x 1360
@@ -34,8 +40,36 @@ const LAND_CLASSES = Object.keys(POWER_COLORS);
 /**
  * Generate a terrain classification mask from SVG content.
  * Returns an HTMLCanvasElement with land/water/impassable encoded in RGB channels.
+ *
+ * Checks IndexedDB cache first — on hit, returns in <5ms.
  */
 export async function generateTerrainMask(svgContent: string): Promise<HTMLCanvasElement> {
+  const cacheKey = `mask-${hashString(svgContent)}`;
+
+  // Try cache first
+  const cached = await getCachedImageData(cacheKey);
+  if (cached) {
+    const canvas = document.createElement("canvas");
+    canvas.width = cached.width;
+    canvas.height = cached.height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.putImageData(cached, 0, 0);
+    return canvas;
+  }
+
+  // Cache miss — full rasterization
+  const canvas = await rasterizeMask(svgContent);
+
+  // Store in cache (async, don't block return)
+  const ctx = canvas.getContext("2d")!;
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  setCachedImageData(cacheKey, imageData);
+
+  return canvas;
+}
+
+/** Full SVG-to-canvas rasterization (the expensive path). */
+async function rasterizeMask(svgContent: string): Promise<HTMLCanvasElement> {
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgContent, "image/svg+xml");
   const svg = doc.querySelector("svg");

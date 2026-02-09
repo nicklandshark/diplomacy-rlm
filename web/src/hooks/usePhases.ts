@@ -12,7 +12,7 @@ export function usePhases(gameId: string, initialPhases: string[]): UsePhasesRes
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`/api/games/${gameId}/phases`, { cache: "no-store" });
+      const res = await fetch(`/api/games/${gameId}/phases?t=${Date.now()}`);
       if (res.ok) {
         const data: string[] = await res.json();
         setPhases(data);

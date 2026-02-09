@@ -7,7 +7,15 @@
  *   255 = highest (Alpine peaks)
  *
  * Returns an HTMLCanvasElement that can be uploaded directly to WebGL via texImage2D.
+ *
+ * Uses IndexedDB caching — the heightmap is fully deterministic (no inputs),
+ * so a static version key is used. Bump HEIGHTMAP_VERSION when feature
+ * coordinates change.
  */
+
+import { getCachedImageData, setCachedImageData } from "./texture-cache";
+
+const HEIGHTMAP_VERSION = "europe-heightmap-v1";
 
 const HM_WIDTH = 2048;
 const HM_HEIGHT = Math.round(HM_WIDTH * (1360 / 1835)); // ≈1520
@@ -211,10 +219,35 @@ function evalFeature(f: GeoFeature, px: number, py: number): number {
 
 /**
  * Generate a European elevation heightmap as a grayscale canvas.
+ * Checks IndexedDB cache first — on hit, returns in <5ms.
  *
  * @returns HTMLCanvasElement (2048 x ~1520, grayscale via ImageData)
  */
-export function generateEuropeHeightmap(): HTMLCanvasElement {
+export async function generateEuropeHeightmap(): Promise<HTMLCanvasElement> {
+  // Try cache first
+  const cached = await getCachedImageData(HEIGHTMAP_VERSION);
+  if (cached) {
+    const canvas = document.createElement("canvas");
+    canvas.width = cached.width;
+    canvas.height = cached.height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.putImageData(cached, 0, 0);
+    return canvas;
+  }
+
+  // Cache miss — full generation
+  const canvas = generateHeightmapFresh();
+
+  // Store in cache (async, don't block return)
+  const ctx = canvas.getContext("2d")!;
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  setCachedImageData(HEIGHTMAP_VERSION, imageData);
+
+  return canvas;
+}
+
+/** Full heightmap generation (the expensive path). */
+function generateHeightmapFresh(): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = HM_WIDTH;
   canvas.height = HM_HEIGHT;

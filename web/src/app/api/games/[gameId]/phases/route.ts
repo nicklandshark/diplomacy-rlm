@@ -7,6 +7,6 @@ export async function GET(
 ) {
   const { gameId } = await params;
   return NextResponse.json(listPhases(gameId), {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": "public, max-age=5" },
   });
 }

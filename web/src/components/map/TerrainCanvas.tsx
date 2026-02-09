@@ -559,19 +559,22 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
 
   // Generate and upload European heightmap as TEXTURE1
   const uploadHeightmap = useCallback((gl: WebGLRenderingContext) => {
-    const hmCanvas = generateEuropeHeightmap();
-    const tex = gl.createTexture();
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    // Flip Y: Canvas (0,0)=top-left, WebGL texture (0,0)=bottom-left
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, hmCanvas);
-    gl.uniform1i(uniformsRef.current.u_heightmap, 1);
-    heightmapReadyRef.current = true;
+    generateEuropeHeightmap().then((hmCanvas) => {
+      const tex = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      // Flip Y: Canvas (0,0)=top-left, WebGL texture (0,0)=bottom-left
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, hmCanvas);
+      gl.uniform1i(uniformsRef.current.u_heightmap, 1);
+      heightmapReadyRef.current = true;
+    }).catch((err) => {
+      console.error("Failed to generate heightmap:", err);
+    });
   }, []);
 
   // Two-pass render loop

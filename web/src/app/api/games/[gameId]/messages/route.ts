@@ -8,6 +8,6 @@ export async function GET(
   const { gameId } = await params;
   const messages = readAllMessages(gameId);
   return NextResponse.json(messages, {
-    headers: { "Cache-Control": "no-store" },
+    headers: { "Cache-Control": "public, max-age=5" },
   });
 }
