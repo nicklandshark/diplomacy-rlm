@@ -466,59 +466,10 @@ export default function GameView({ gameId, initialPhases, svgContent }: Props) {
                 />
               )}
             </div>
-            {/* Power chips as legend */}
-            <div className="scroll-fade-x flex items-center justify-center gap-1.5 px-4 py-1.5 w-full">
-              {activePowers.map((power) => {
-                const isActive = selectedPower === power;
-                const unitCount = ((state?.units?.[power] as string[]) || []).length;
-                const scCount = ((state?.centers?.[power]) || []).length;
-                const status = powerStatus[power] || "idle";
-                const cfg = STATUS_CONFIG[status];
-                return (
-                  <button
-                    key={power}
-                    onClick={() => setSelectedPower(power)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs transition-all whitespace-nowrap flex-shrink-0 ${
-                      isActive
-                        ? "bg-gray-800 border-blue-500/60 shadow-sm shadow-blue-500/10"
-                        : "bg-gray-800/40 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
-                    }`}
-                    style={{ borderWidth: 1, borderStyle: "solid" }}
-                  >
-                    <PowerBadge power={power} size="sm" />
-                    <span className="text-gray-400">
-                      {unitCount}u
-                    </span>
-                    <span className="text-gray-600">|</span>
-                    <span className="text-gray-400">
-                      {scCount}sc
-                    </span>
-                    {status !== "idle" && (
-                      cfg.icon ? (
-                        <span className={`text-[10px] font-bold ${
-                          status === "submitted" ? "text-green-400" :
-                          status === "defaulted" ? "text-yellow-500" :
-                          "text-orange-400"
-                        }`}>
-                          {cfg.icon}
-                        </span>
-                      ) : (
-                        <span className="relative flex h-2 w-2">
-                          {cfg.animate && (
-                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${cfg.dot} opacity-75`} />
-                          )}
-                          <span className={`relative inline-flex rounded-full h-2 w-2 ${cfg.dot}`} />
-                        </span>
-                      )
-                    )}
-                  </button>
-                );
-              })}
-            </div>
           </div>
           {/* Activity feed below map — fixed height so it's always visible */}
           <div className="h-44 flex-shrink-0 bg-gray-900/50 rounded-lg border border-gray-800 overflow-hidden">
-            <ActivityFeed events={liveEvents.events} connected={liveEvents.connected} gameLog={gameLog} livePhase={livePhase} liveStep={liveStep} phaseCount={phases.length} powerStatus={powerStatus} />
+            <ActivityFeed events={liveEvents.events} connected={liveEvents.connected} gameLog={gameLog} livePhase={livePhase} liveStep={liveStep} phaseCount={phases.length} powerStatus={powerStatus} activePowers={activePowers} selectedPower={selectedPower} onSelectPower={setSelectedPower} units={state?.units as Record<string, string[]> | undefined} centers={state?.centers as Record<string, string[]> | undefined} />
           </div>
         </div>
 

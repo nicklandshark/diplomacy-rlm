@@ -6,6 +6,16 @@ import type { PowerStatus } from "@/hooks/usePowerStatus";
 import ActivityItem, { shouldRender } from "./ActivityItem";
 import { phaseDisplayName, POWER_DISPLAY_COLORS } from "@/lib/constants";
 import { powerFlag } from "@/lib/power-flags";
+import PowerBadge from "@/components/power/PowerBadge";
+
+const STATUS_CHIP_CONFIG: Record<PowerStatus, { dot: string; animate: boolean; icon?: string }> = {
+  idle: { dot: "", animate: false },
+  thinking: { dot: "bg-amber-400", animate: true },
+  talking: { dot: "bg-blue-400", animate: true },
+  submitted: { dot: "bg-green-400", animate: false, icon: "\u2713" },
+  defaulted: { dot: "bg-yellow-500", animate: false, icon: "\u2013" },
+  timeout: { dot: "bg-orange-400", animate: false, icon: "!" },
+};
 
 interface Props {
   events: LiveEvent[];
@@ -15,6 +25,11 @@ interface Props {
   liveStep?: string | null;
   phaseCount?: number;
   powerStatus?: Record<string, PowerStatus>;
+  activePowers?: string[];
+  selectedPower?: string | null;
+  onSelectPower?: (power: string) => void;
+  units?: Record<string, string[]>;
+  centers?: Record<string, string[]>;
 }
 
 function LogEntry({ entry }: { entry: GameLogEvent }) {
@@ -87,7 +102,7 @@ const STATUS_LABELS: Record<PowerStatus, { text: string; color: string }> = {
   timeout: { text: "Timed out", color: "text-orange-400" },
 };
 
-export default function ActivityFeed({ events, connected, gameLog, livePhase, liveStep, phaseCount, powerStatus }: Props) {
+export default function ActivityFeed({ events, connected, gameLog, livePhase, liveStep, phaseCount, powerStatus, activePowers, selectedPower, onSelectPower, units, centers }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [filterPower, setFilterPower] = useState<string | null>(null);
 
@@ -132,10 +147,53 @@ export default function ActivityFeed({ events, connected, gameLog, livePhase, li
             </span>
           </>
         )}
-        {/* Power filter chips */}
-        {eventPowers.length > 1 && (
-          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-            {eventPowers.map(p => {
+        {/* Power chips + activity filter */}
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+          {activePowers && activePowers.length > 0 ? (
+            activePowers.map((power) => {
+              const isActive = selectedPower === power;
+              const unitCount = (units?.[power] || []).length;
+              const scCount = (centers?.[power] || []).length;
+              const status = (powerStatus?.[power] || "idle") as PowerStatus;
+              const cfg = STATUS_CHIP_CONFIG[status];
+              return (
+                <button
+                  key={power}
+                  onClick={() => onSelectPower?.(power)}
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] transition-all whitespace-nowrap flex-shrink-0 ${
+                    isActive
+                      ? "bg-gray-800 border-blue-500/60 shadow-sm shadow-blue-500/10"
+                      : "bg-gray-800/40 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
+                  }`}
+                  style={{ borderWidth: 1, borderStyle: "solid" }}
+                >
+                  <PowerBadge power={power} size="sm" />
+                  <span className="text-gray-400">{unitCount}u</span>
+                  <span className="text-gray-600">|</span>
+                  <span className="text-gray-400">{scCount}sc</span>
+                  {status !== "idle" && (
+                    cfg.icon ? (
+                      <span className={`text-[9px] font-bold ${
+                        status === "submitted" ? "text-green-400" :
+                        status === "defaulted" ? "text-yellow-500" :
+                        "text-orange-400"
+                      }`}>
+                        {cfg.icon}
+                      </span>
+                    ) : (
+                      <span className="relative flex h-1.5 w-1.5">
+                        {cfg.animate && (
+                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${cfg.dot} opacity-75`} />
+                        )}
+                        <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${cfg.dot}`} />
+                      </span>
+                    )
+                  )}
+                </button>
+              );
+            })
+          ) : (
+            eventPowers.length > 1 && eventPowers.map(p => {
               const active = filterPower === p;
               return (
                 <button
@@ -150,9 +208,9 @@ export default function ActivityFeed({ events, connected, gameLog, livePhase, li
                   {powerFlag(p)}
                 </button>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
       <div className="overflow-auto flex-1">
         {hasLiveContent ? (
