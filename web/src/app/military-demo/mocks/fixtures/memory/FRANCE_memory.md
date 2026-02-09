@@ -1,0 +1,80 @@
+# France Strategic Memory - W1903A
+
+## Current State
+- Phase: W1903A (Adjustment)
+- Units: ['A BUR', 'A GAS', 'A MAR', 'F MAO']
+- Centers: ['BRE', 'MAR', 'PAR', 'SPA']
+- Orders submitted: []
+
+## Board Overview
+- AUSTRIA: 4 units, 4 centers
+- ENGLAND: 2 units, 3 centers
+- FRANCE: 4 units, 4 centers
+- GERMANY: 5 units, 6 centers
+- ITALY: 3 units, 3 centers
+- RUSSIA: 5 units, 6 centers
+- TURKEY: 4 units, 5 centers
+
+## Strategic Notes
+- Builds available: 0
+- Current fleet/army ratio tracked for balance
+- Monitor neighbor threats and alliance opportunities
+### S1901M Orders
+France orders: F BRE S A PAR - PIC, A MAR - GAS, A PAR - PIC
+### End of S1901M
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE support A PIC.
+Orders: ['A GAS - MAR', 'A PIC S A GAS - MAR', 'F BRE S A PIC']
+###
+### F1901M Corrected Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: ['A GAS - MAR', 'A PIC S A GAS - MAR', 'F BRE H']
+###
+### F1901M Orders
+Decided on orders based on current game state and communications.
+Orders: []
+###
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: []
+###
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: []
+###
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: ['A GAS - MAR', 'A PIC S A GAS - MAR', 'F BRE H']
+###
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: ['A GAS - MAR', 'A PIC S A GAS - MAR', 'F BRE H']
+###
+### F1901M Orders
+Decided to move A GAS to MAR, support with A PIC, and have F BRE hold.
+Orders: ['A GAS - MAR', 'A PIC S A GAS - MAR', 'F BRE H']
+###
+### W1902A Orders
+Decided to build A PAR.
+Orders: A PAR B
+###
+Decided on orders: ['F BRE - ENG', 'A PIC - BRE', 'A SPA - GAS', 'A PAR S A SPA - GAS']
+Final Orders: F ENG S A PIC - BEL, A MAR - BUR, A PAR - PIC, A PIC - BEL
+Outcome: Accepted 4 orders
+Final Orders: F ENG S A PIC - BEL, A MAR - BUR, A PAR - PIC, A PIC - BEL
+Outcome: Accepted 4 orders
+Built F MAR B in W1904A. Built F MAR B in W1904A. Orders submitted: ['A BEL - BUR', 'F ENG - NTH', 'A GAS - MAR', 'A PAR S F ENG - PIC', 'F SPA/SC - MAO']
+Decision: []
+Reasoning: Based on current game state and messages.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.
+Decision: ['WAIVE']
+Reasoning: France has the same number of units and centers, so WAIVE.

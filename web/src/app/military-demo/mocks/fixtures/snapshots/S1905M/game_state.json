@@ -1,0 +1,169 @@
+{
+  "builds": {
+    "AUSTRIA": {
+      "count": 0,
+      "homes": []
+    },
+    "ENGLAND": {
+      "count": 0,
+      "homes": []
+    },
+    "FRANCE": {
+      "count": 0,
+      "homes": []
+    },
+    "GERMANY": {
+      "count": 0,
+      "homes": []
+    },
+    "ITALY": {
+      "count": 0,
+      "homes": []
+    },
+    "RUSSIA": {
+      "count": 0,
+      "homes": []
+    },
+    "TURKEY": {
+      "count": 0,
+      "homes": []
+    }
+  },
+  "centers": {
+    "AUSTRIA": [
+      "BUD",
+      "TRI",
+      "VIE",
+      "GRE",
+      "BUL"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "BRE",
+      "MAR",
+      "PAR",
+      "SPA",
+      "BEL"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "SEV",
+      "STP",
+      "WAR",
+      "RUM"
+    ],
+    "TURKEY": []
+  },
+  "civil_disorder": {
+    "AUSTRIA": 0,
+    "ENGLAND": 0,
+    "FRANCE": 0,
+    "GERMANY": 0,
+    "ITALY": 0,
+    "RUSSIA": 0,
+    "TURKEY": 0
+  },
+  "homes": {
+    "AUSTRIA": [
+      "BUD",
+      "TRI",
+      "VIE"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "BRE",
+      "MAR",
+      "PAR"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "SEV",
+      "STP",
+      "WAR"
+    ],
+    "TURKEY": []
+  },
+  "influence": {
+    "AUSTRIA": [
+      "BUD",
+      "ALB",
+      "VIE",
+      "VEN",
+      "GRE",
+      "TRI",
+      "BUL"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "PAR",
+      "SPA",
+      "ENG",
+      "BRE",
+      "GAS",
+      "MAR",
+      "PIC",
+      "BEL",
+      "BUR"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "STP",
+      "UKR",
+      "LVN",
+      "BLA",
+      "GAL",
+      "SIL",
+      "SEV",
+      "BAL",
+      "PRU",
+      "WAR",
+      "RUM"
+    ],
+    "TURKEY": []
+  },
+  "name": "S1905M",
+  "note": "",
+  "retreats": {
+    "AUSTRIA": {},
+    "ENGLAND": {},
+    "FRANCE": {},
+    "GERMANY": {},
+    "ITALY": {},
+    "RUSSIA": {},
+    "TURKEY": {}
+  },
+  "timestamp": 1770410694660609,
+  "units": {
+    "AUSTRIA": [
+      "A VIE",
+      "A BUD",
+      "A TRI",
+      "F BUL/SC"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "F ENG",
+      "A PIC",
+      "A BEL",
+      "A BUR",
+      "F MAR"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "A SIL",
+      "F BAL",
+      "F STP/NC",
+      "A WAR",
+      "F RUM"
+    ],
+    "TURKEY": []
+  },
+  "zobrist_hash": "1175513015064142854"
+}
