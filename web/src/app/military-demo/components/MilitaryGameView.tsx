@@ -216,7 +216,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
               return (
                 <div
                   key={phase}
-                  className={`relative w-14 h-14 border-2 flex items-center justify-center transition-all cursor-pointer ${
+                  className={`relative w-14 h-14 flex-shrink-0 border-2 flex items-center justify-center transition-all cursor-pointer ${
                     isCurrent
                       ? "border-[#ff9500] bg-[#ff9500]/10 text-[#ff9500]"
                       : isPast
@@ -241,9 +241,9 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
       </TacticalPanel>
 
       {/* Main 3-Column Layout */}
-      <div className="flex gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-[minmax(280px,320px)_1fr_minmax(320px,380px)] gap-4 flex-1 min-h-0">
         {/* Left Sidebar: Orders/Messages/Summary */}
-        <div className="w-80 flex-shrink-0 flex flex-col gap-4 min-h-0">
+        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
           <TacticalPanel title="INTELLIGENCE" className="flex-1 min-h-0 flex flex-col">
             {/* Tab Buttons */}
             <div className="flex gap-2 mb-4">
@@ -381,7 +381,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
 
         {/* Right Sidebar: Activity + Memory */}
-        <div className="w-96 flex-shrink-0 flex flex-col gap-4 min-h-0">
+        <div className="flex flex-col gap-4 min-h-0 overflow-hidden">
           {/* Activity Feed */}
           <ActionLog
             actions={gameLog.map((entry, idx) => ({
