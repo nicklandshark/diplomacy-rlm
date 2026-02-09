@@ -37,12 +37,12 @@ export interface TerrainConfig {
 }
 
 export const TERRAIN_DEFAULTS: TerrainConfig = {
-  scale: 5,
+  scale: 5.6,
   octaves: 8,
-  lacunarity: 2.30,
-  persistence: 0.48,
-  ridgeMix: 0.28,
-  warpStrength: 0.45,
+  lacunarity: 2.65,
+  persistence: 0.47,
+  ridgeMix: 0.27,
+  warpStrength: 0.0,
   seaLevel: 0.29,
   coastSharp: 0.08,
   sunAngle: 2.4,
@@ -51,14 +51,14 @@ export const TERRAIN_DEFAULTS: TerrainConfig = {
   shadowDepth: 0.25,
   specular: 1.47,
   saturation: 1.0,
-  warmth: 0.0,
+  warmth: -0.17,
   snowLine: 0.48,
   oceanDepth: 0.10,
   vignette: 0.2,
   erosion: 0.4,
-  waterAnim: 0.5,
-  heightmapBlend: 0.0,
-  heightmapScale: 0.8,
+  waterAnim: 1.0,
+  heightmapBlend: 0.16,
+  heightmapScale: 0.0,
 };
 
 export const TERRAIN_PRESETS: Record<string, TerrainConfig> = {

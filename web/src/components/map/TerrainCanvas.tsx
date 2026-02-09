@@ -50,6 +50,11 @@ const FRAG = `
   uniform float u_heightmapBlend; // 0=procedural, 1=heightmap
   uniform float u_heightmapScale; // amplitude multiplier
 
+  // FBO two-pass rendering
+  uniform int u_renderMode;       // 0=land pass (to FBO), 1=display pass (to screen)
+  uniform sampler2D u_landCache;  // TEXTURE2 — cached land FBO
+  uniform float u_zoom;           // derived from viewBox width (1.0 = full map)
+
   // --- Simplex 2D ---
   vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
   vec2 mod289(vec2 x){return x-floor(x*(1./289.))*289.;}
@@ -231,9 +236,9 @@ const FRAG = `
 
     // Decorrelated rotation matrices
     float an=u_time*.03*u_waterAnim;
-    mat2 r1=mat2(.80,.60,-.60,.80);  // ~37°
-    mat2 r2=mat2(.60,.80,-.80,.60);  // ~53°
-    mat2 r3=mat2(.95,.31,-.31,.95);  // ~18°
+    mat2 r1=mat2(.80,.60,-.60,.80);  // ~37 deg
+    mat2 r2=mat2(.60,.80,-.80,.60);  // ~53 deg
+    mat2 r3=mat2(.95,.31,-.31,.95);  // ~18 deg
 
     // Broad swell — gentle rolling luminance that drifts visibly
     float swell=snoise(r1*(p*3.0)+vec2(an*.35,an*.22))*.5+.5;
@@ -249,6 +254,7 @@ const FRAG = `
     // Micro ripple — animated fine grain
     float w=snoise(r3*(p*28.+vec2(an*.9,-an*.4)))*.008*(1.-d);
     b+=vec3(w*.4,w*.7,w);
+
     return b;
   }
 
@@ -273,42 +279,42 @@ const FRAG = `
     return h;
   }
 
-  void main(){
-    // Map screen UV to map-space UV using viewBox
-    vec2 uv = u_viewBox.xy + v_uv * u_viewBox.zw;
-    vec2 p = uv;
-    vec2 mapUV = uv; // full-map-space UV for regional color
-
-    // Sample province classification mask
+  // =====================================================
+  // MODE 0: Land pass — renders to FBO
+  // Full terrain computation for land pixels, alpha=0 for water.
+  // Skips vignette/tonemap/gamma (view-dependent, applied in display pass).
+  // =====================================================
+  void landPass(vec2 uv, vec2 p, vec2 mapUV){
     vec4 mask = texture2D(u_mask, uv);
     float powerIdx = mask.r;
     float impassMask = mask.g;
-    float waterMask = mask.b;
     float landMask = max(step(0.05, powerIdx), step(0.5, impassMask));
-    float combinedLand = landMask;
 
-    // Mask gradient — edge fade + coast proximity in one pass (4 texture reads)
+    // Water pixels: transparent in land cache
+    if(landMask < 0.5){
+      gl_FragColor = vec4(0.0);
+      return;
+    }
+
+    // Mask gradient for edge fade
     vec2 mg = maskGradient(uv);
     float edgeFade = mg.x;
-    float coastDist = mg.y;
 
     // Domain warp — attenuated near mask boundaries
     vec2 wp=warp(p*u_scale*.5+vec2(1.7,3.2),u_warpStrength*.15*edgeFade);
     vec2 wp2=warp(wp,u_warpStrength*.08*edgeFade);
 
-    // Sample heightmap for geographic elevation
+    // Height computation — always use full fbm (FBO only re-renders on dirty,
+    // not every frame, so there's no reason to sacrifice quality)
     float realH = texture2D(u_heightmap, uv).r * u_heightmapScale;
-
-    // Procedural height
-    float procH = fbm(wp2,u_ridgeMix);
-
-    // Blend procedural noise with geographic heightmap
+    float procH = fbm(wp2, u_ridgeMix);
     float blendedH = mix(procH, realH, u_heightmapBlend);
 
-    float h = blendedH * .65 + combinedLand * .45 - .1;
+    float h = blendedH * .65 + landMask * .45 - .1;
     h += impassMask * 0.15;
+    h = max(h, u_seaLevel + 0.01);
 
-    float er=erosionDetail(wp2);
+    float er = erosionDetail(wp2);
 
     // Normal via finite differences
     float eps=.0015;
@@ -323,68 +329,100 @@ const FRAG = `
     float shd=1.-u_shadowDepth*max(0.,-dot(N,L));
     float lit=u_ambient+(1.-u_ambient)*diff*shd;
 
+    vec3 tc=terrainColor(h,er,p,mapUV)*lit;
+    float ao=1.-clamp((h-hL+h-hR+h-hU+h-hD)*-2.,0.,.3);
+    tc*=ao;
+
+    // Power tinting
+    vec3 pt;
+    if(powerIdx>0.85) pt=vec3(1.05,0.98,0.75);       // turkey
+    else if(powerIdx>0.75) pt=vec3(0.88,0.90,1.05);   // russia
+    else if(powerIdx>0.65) pt=vec3(0.85,1.08,0.82);   // italy
+    else if(powerIdx>0.55) pt=vec3(1.02,0.98,0.88);   // germany
+    else if(powerIdx>0.45) pt=vec3(0.88,0.92,1.10);   // france
+    else if(powerIdx>0.35) pt=vec3(0.98,0.88,1.05);   // england
+    else if(powerIdx>0.25) pt=vec3(1.08,0.90,0.88);   // austria
+    else if(powerIdx>0.15) pt=vec3(1.0,0.98,0.95);    // nopower
+    else pt=vec3(0.95,0.95,0.95);                      // neutral
+    vec3 color=tc*pt;
+
+    // Bake warmth, saturation, and land darkening into cache
+    color.r+=u_warmth*.08; color.b-=u_warmth*.05;
+    color=adjSat(color,u_saturation);
+    color*=0.82; // land darkening
+
+    gl_FragColor=vec4(color, 1.0);
+  }
+
+  // =====================================================
+  // MODE 1: Display pass — renders to screen
+  // Samples FBO for land, computes water live, applies view-dependent effects.
+  // =====================================================
+  void displayPass(vec2 uv, vec2 p, vec2 mapUV){
+    // Use mask for authoritative land/water classification
+    vec4 mask = texture2D(u_mask, uv);
+    float landMask = max(step(0.05, mask.r), step(0.5, mask.g));
+
     vec3 color;
-    float sl=u_seaLevel;
+    if(landMask > 0.5){
+      // Land pixel — read from FBO cache (already has warmth/sat/darkening)
+      vec4 cached = texture2D(u_landCache, v_uv);
+      color = cached.rgb;
+    } else {
+      // Water pixel — compute live every frame
+      vec2 mg = maskGradient(uv);
+      float coastDist = mg.y;
 
-    // Mask-authoritative land/water classification.
-    // Height alone (h<sl) fails because procedural noise can push
-    // land below seaLevel or water above, severely misclassifying provinces.
-    bool isWater = combinedLand < 0.5;
+      // Heightmap-only depth (skip fbm — water depth is just for color gradients)
+      float realH = texture2D(u_heightmap, uv).r * u_heightmapScale;
+      float h = realH * .65 - .1;
+      h = min(h, u_seaLevel - 0.03);
 
-    // Clamp height to respect mask so color gradients stay sane
-    if(isWater) h = min(h, sl - 0.03);
-    else h = max(h, sl + 0.01);
+      color = waterColor(h, p, mapUV, coastDist);
 
-    if(isWater){
-      color=waterColor(h,p,mapUV,coastDist);
-      // Specular — visible glints that shimmer with wave motion
+      // Specular with simplified normal (flat base + snoise perturbation,
+      // skip 4x sampleH — saves ~32 snoise vs full terrain normals)
+      vec3 L=normalize(vec3(cos(u_sunAngle)*cos(u_sunElev),sin(u_sunAngle)*cos(u_sunElev),sin(u_sunElev)));
       vec3 hd=normalize(L+vec3(0.,0.,1.));
       float an=u_time*.03*u_waterAnim;
       mat2 wr=mat2(.8,.6,-.6,.8);
       vec2 wnp=wr*(p*18.+vec2(an*.8,an*.4));
-      vec3 wn=N; wn.x+=snoise(wnp)*.008; wn.y+=snoise(wnp+vec2(5.3,1.7))*.008; wn=normalize(wn);
+      vec3 wn=vec3(snoise(wnp)*.008, snoise(wnp+vec2(5.3,1.7))*.008, 1.0);
+      wn=normalize(wn);
       float sp=pow(max(dot(wn,hd),0.),40.);
-      float d=clamp((sl-h)/(u_oceanDepth*.5),0.,1.);
+      float d=clamp((u_seaLevel-h)/(u_oceanDepth*.5),0.,1.);
       color+=vec3(.5,.6,.85)*sp*u_specular*.10*(1.-d*.5);
-    } else {
-      vec3 tc=terrainColor(h,er,p,mapUV)*lit;
-      float ao=1.-clamp((h-hL+h-hR+h-hU+h-hD)*-2.,0.,.3);
-      tc*=ao;
-      // Subtle power tinting — biome colors dominate, power is a gentle hue shift
-      vec3 pt;
-      if(powerIdx>0.85) pt=vec3(1.05,0.98,0.75);       // turkey - warm gold shift
-      else if(powerIdx>0.75) pt=vec3(0.88,0.90,1.05);   // russia - cool steel shift
-      else if(powerIdx>0.65) pt=vec3(0.85,1.08,0.82);   // italy - green boost
-      else if(powerIdx>0.55) pt=vec3(1.02,0.98,0.88);   // germany - warm khaki shift
-      else if(powerIdx>0.45) pt=vec3(0.88,0.92,1.10);   // france - blue shift
-      else if(powerIdx>0.35) pt=vec3(0.98,0.88,1.05);   // england - purple shift
-      else if(powerIdx>0.25) pt=vec3(1.08,0.90,0.88);   // austria - red shift
-      else if(powerIdx>0.15) pt=vec3(1.0,0.98,0.95);    // nopower - slight warm
-      else pt=vec3(0.95,0.95,0.95);                      // neutral - slight desaturate
-      color=tc*pt;
+
+      // Apply warmth/saturation to live water
+      color.r+=u_warmth*.08; color.b-=u_warmth*.05;
+      color=adjSat(color,u_saturation);
     }
 
-    color.r+=u_warmth*.08; color.b-=u_warmth*.05;
-    color=adjSat(color,u_saturation);
-
-    // Vignette in map-space — applied relative to full map center,
-    // not screen center. This prevents a visible circle when zoomed in.
-    // Attenuate by zoom level: when zoomed in (viewBox smaller), reduce effect.
+    // View-dependent effects applied to ALL pixels (both cached land and live water)
+    // Vignette in map-space
     float zoomLevel = 1.0 / max(u_viewBox.z, 0.01);
-    float vigFade = smoothstep(1.5, 1.0, zoomLevel); // fade out when zoomed > 1.5x
+    float vigFade = smoothstep(1.5, 1.0, zoomLevel);
     float vig=1.-u_vignette*vigFade*length((mapUV-.5)*1.2);
     color*=vig;
 
+    // Tonemap + gamma
     color=color/(color+.5)*1.4;
     color=pow(max(color,0.),vec3(1./2.2));
 
-    // Darken land slightly — territory fills paint on top via SVG overlay.
-    // Keep at 0.82 so biome colors remain visible through semi-transparent fills.
-    if(!isWater){
-      color*=0.82;
-    }
+    gl_FragColor=vec4(color, 1.0);
+  }
 
-    gl_FragColor=vec4(color,1.);
+  void main(){
+    // Map screen UV to map-space UV using viewBox
+    vec2 uv = u_viewBox.xy + v_uv * u_viewBox.zw;
+    vec2 p = uv;
+    vec2 mapUV = uv;
+
+    if(u_renderMode == 0){
+      landPass(uv, p, mapUV);
+    } else {
+      displayPass(uv, p, mapUV);
+    }
   }
 `;
 
@@ -398,6 +436,7 @@ const UNIFORM_NAMES = [
   "u_warmth", "u_snowLine", "u_oceanDepth", "u_vignette",
   "u_erosion", "u_waterAnim", "u_mask",
   "u_heightmap", "u_heightmapBlend", "u_heightmapScale",
+  "u_renderMode", "u_landCache", "u_zoom",
 ] as const;
 
 function compileShader(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
@@ -421,6 +460,12 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
   const configRef = useRef<TerrainConfig>({ ...TERRAIN_DEFAULTS, ...config });
   const maskReadyRef = useRef(false);
   const heightmapReadyRef = useRef(false);
+
+  // FBO refs for land cache
+  const fboRef = useRef<WebGLFramebuffer | null>(null);
+  const fboTexRef = useRef<WebGLTexture | null>(null);
+  const fboSizeRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const lastRenderKeyRef = useRef("");
 
   // Keep config ref fresh
   configRef.current = { ...TERRAIN_DEFAULTS, ...config };
@@ -463,6 +508,30 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
     const u: Record<string, WebGLUniformLocation | null> = {};
     for (const n of UNIFORM_NAMES) u[n] = gl.getUniformLocation(prog, n);
     uniformsRef.current = u;
+
+    // Create FBO + texture for land cache (start at 1x1, resize in render loop)
+    const fbo = gl.createFramebuffer();
+    const fboTex = gl.createTexture();
+    fboRef.current = fbo;
+    fboTexRef.current = fboTex;
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, fboTex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    // Attach to FBO
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    // Set sampler binding once (persistent)
+    gl.uniform1i(u.u_landCache, 2);
+
+    fboSizeRef.current = { w: 1, h: 1 };
   }, []);
 
   // Generate and upload mask texture from SVG
@@ -505,7 +574,7 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
     heightmapReadyRef.current = true;
   }, []);
 
-  // Render loop
+  // Two-pass render loop
   const startLoop = useCallback(() => {
     const render = (t: number) => {
       const gl = glRef.current;
@@ -531,18 +600,19 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
-        gl.viewport(0, 0, w, h);
       }
 
       const c = configRef.current;
       const vb = viewBoxRef.current;
 
+      // Compute zoom level (1.0 = full map visible, higher = zoomed in)
+      const zoom = MAP_W / Math.max(vb.w, 1);
+
+      // Set common uniforms
       gl.uniform1f(u.u_time, t * 0.001);
       gl.uniform2f(u.u_resolution, w, h);
-      // ViewBox: normalize to 0-1 range relative to full map.
-      // Y is inverted: SVG y goes top-down (0=north) but the texture
-      // (with UNPACK_FLIP_Y) has v going bottom-up (0=south, 1=north).
       gl.uniform4f(u.u_viewBox, vb.x / MAP_W, 1.0 - (vb.y + vb.h) / MAP_H, vb.w / MAP_W, vb.h / MAP_H);
+      gl.uniform1f(u.u_zoom, zoom);
 
       gl.uniform1f(u.u_scale, c.scale);
       gl.uniform1f(u.u_octaves, c.octaves);
@@ -567,7 +637,51 @@ export default function TerrainCanvas({ config, viewBox, svgContent, onReady }: 
       gl.uniform1f(u.u_heightmapBlend, c.heightmapBlend);
       gl.uniform1f(u.u_heightmapScale, c.heightmapScale);
 
+      // Dirty check: should we re-render the land FBO?
+      const renderKey = `${w},${h},${vb.x},${vb.y},${vb.w},${vb.h},` +
+        `${c.scale},${c.octaves},${c.lacunarity},${c.persistence},` +
+        `${c.ridgeMix},${c.warpStrength},${c.seaLevel},${c.coastSharp},` +
+        `${c.sunAngle},${c.sunElev},${c.ambient},${c.shadowDepth},` +
+        `${c.saturation},${c.warmth},${c.snowLine},${c.erosion},` +
+        `${c.heightmapBlend},${c.heightmapScale}`;
+      const isDirty = renderKey !== lastRenderKeyRef.current;
+
+      if (isDirty) {
+        // Resize FBO texture if canvas size changed
+        const fboSize = fboSizeRef.current;
+        if (fboSize.w !== w || fboSize.h !== h) {
+          gl.activeTexture(gl.TEXTURE2);
+          gl.bindTexture(gl.TEXTURE_2D, fboTexRef.current);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          fboSizeRef.current = { w, h };
+        }
+
+        // Unbind FBO texture from TEXTURE2 before land pass to prevent
+        // WebGL feedback loop (same texture as FBO target + sampler source).
+        // Even though landPass() never samples u_landCache, WebGL checks
+        // uniform/texture bindings at draw time, not per code path.
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+
+        // Land pass: render to FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fboRef.current);
+        gl.viewport(0, 0, w, h);
+        gl.uniform1i(u.u_renderMode, 0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+        // Rebind FBO texture to TEXTURE2 for display pass reads
+        gl.activeTexture(gl.TEXTURE2);
+        gl.bindTexture(gl.TEXTURE_2D, fboTexRef.current);
+
+        lastRenderKeyRef.current = renderKey;
+      }
+
+      // Display pass: render to screen (every frame — water animates)
+      gl.viewport(0, 0, w, h);
+      gl.uniform1i(u.u_renderMode, 1);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
       rafRef.current = requestAnimationFrame(render);
     };
     rafRef.current = requestAnimationFrame(render);
