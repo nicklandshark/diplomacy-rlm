@@ -1,9 +1,6 @@
 // Shared Military UI Components
 // These are the actual components from the military-ui-kit that should be reused
 
-// Import pixel icons from icons page (we'll reference these)
-export * from "./icons/components";
-
 // Rivet - Steel rivet with depth and cross slot
 export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?: number; style?: React.CSSProperties }) => (
   <div
