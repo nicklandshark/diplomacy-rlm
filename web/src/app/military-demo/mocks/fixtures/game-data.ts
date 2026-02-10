@@ -42,9 +42,11 @@ class FixtureLoader {
   }
 
   async getMemory(power: string, phase?: string): Promise<string | null> {
+    // Use the latest phase if no phase specified
+    const targetPhase = phase || PHASES[PHASES.length - 1];
+
     try {
-      const fileName = `${power}_memory.md`;
-      const res = await fetch(`/military-demo/mocks/fixtures/memory/${fileName}`);
+      const res = await fetch(`/military-demo/mocks/fixtures/snapshots/${targetPhase}/memory/${power}_memory.md`);
       return res.ok ? await res.text() : null;
     } catch {
       return null;
