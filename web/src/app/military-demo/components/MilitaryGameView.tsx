@@ -402,6 +402,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
               <MessagePanel
                 messages={allMessages}
                 liveMessages={liveMessages}
+                connected={liveEvents.connected}
+                livePhase={livePhase}
               />
             )}
             {leftTab === "summary" && (
