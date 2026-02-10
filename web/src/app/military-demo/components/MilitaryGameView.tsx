@@ -411,10 +411,13 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
         {/* Center: Map + Activity (unified) */}
         <div className="flex-1 min-w-0 flex flex-col gap-1 min-h-0">
-          {/* Map area - takes 70% of available space, scales by aspect ratio */}
-          <div className="flex-[7_1_0] min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
+          {/* Map area - constrained max height, sizes by aspect ratio */}
+          <div className="w-full flex-shrink min-h-0" style={{
+            maxHeight: '70vh',
+            containerType: 'size'
+          }}>
             {loading ? (
-              <div className="flex items-center justify-center h-full text-[#808080]">
+              <div className="flex items-center justify-center h-64 text-[#808080]">
                 Loading phase data...
               </div>
             ) : (
@@ -430,8 +433,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
             )}
           </div>
 
-          {/* Activity feed below map — takes 30% of available space, minimum 80px */}
-          <TacticalPanel className="flex-[3_0_80px] flex-shrink-0 flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
+          {/* Activity feed below map — fills ALL remaining vertical space */}
+          <TacticalPanel className="flex-1 min-h-[80px] flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
             <ActivityFeed
               events={liveEvents.events}
               connected={liveEvents.connected}

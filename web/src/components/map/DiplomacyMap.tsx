@@ -387,9 +387,7 @@ export default function DiplomacyMap({
       ref={containerRef}
       className={`relative overflow-hidden rounded-lg border border-gray-800 mx-auto ${showTerrain && terrainReady ? "terrain-active" : "bg-gray-900"}`}
       style={{
-        width: '100%',
-        height: 'auto',
-        maxHeight: '100%',
+        width: `min(100cqw, calc(100cqh * ${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}))`,
         aspectRatio: `${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}`,
       }}
       onMouseDown={handleMouseDown}
