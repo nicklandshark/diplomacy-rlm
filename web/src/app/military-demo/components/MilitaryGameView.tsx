@@ -410,9 +410,9 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </TacticalPanel>
 
         {/* Center: Map + Activity (unified) */}
-        <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
-          {/* Map area - takes most space (3x growth ratio), scales by aspect ratio */}
-          <div className="flex-[3_1_0] min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-1 min-h-0">
+          {/* Map area - takes 70% of available space, scales by aspect ratio */}
+          <div className="flex-[7_1_0] min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
             {loading ? (
               <div className="flex items-center justify-center h-full text-[#808080]">
                 Loading phase data...
@@ -430,8 +430,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
             )}
           </div>
 
-          {/* Activity feed below map — fills remaining space (1x growth ratio from 100px base) */}
-          <TacticalPanel className="flex-[1_1_100px] flex-shrink flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
+          {/* Activity feed below map — takes 30% of available space, minimum 80px */}
+          <TacticalPanel className="flex-[3_0_80px] flex-shrink-0 flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
             <ActivityFeed
               events={liveEvents.events}
               connected={liveEvents.connected}
