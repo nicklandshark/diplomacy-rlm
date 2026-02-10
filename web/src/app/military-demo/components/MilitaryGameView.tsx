@@ -411,29 +411,27 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
         {/* Center: Map + Activity (unified) */}
         <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
-          {/* Map area - scales by aspect ratio, centered */}
-          <div className="flex items-center justify-center flex-shrink-0 w-full" style={{ containerType: 'size' }}>
+          {/* Map area - takes most space (3x growth ratio), scales by aspect ratio */}
+          <div className="flex-[3_1_0] min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
             {loading ? (
-              <div className="flex items-center justify-center h-64 text-[#808080]">
+              <div className="flex items-center justify-center h-full text-[#808080]">
                 Loading phase data...
               </div>
             ) : (
-              <div className="w-full max-h-full">
-                <DiplomacyMap
-                  svgContent={svgContent}
-                  state={state}
-                  orders={displayOrders || undefined}
-                  results={results}
-                  hoveredOrder={hoveredOrder}
-                  focusLocation={focusLocation}
-                  revealedOrderCount={playing ? revealedOrderCount : -1}
-                />
-              </div>
+              <DiplomacyMap
+                svgContent={svgContent}
+                state={state}
+                orders={displayOrders || undefined}
+                results={results}
+                hoveredOrder={hoveredOrder}
+                focusLocation={focusLocation}
+                revealedOrderCount={playing ? revealedOrderCount : -1}
+              />
             )}
           </div>
 
-          {/* Activity feed below map — fills remaining vertical space */}
-          <TacticalPanel className="flex-1 flex-shrink flex flex-col min-h-0" contentClassName="p-0 flex flex-col flex-1 min-h-0">
+          {/* Activity feed below map — fills remaining space (1x growth ratio from 100px base) */}
+          <TacticalPanel className="flex-[1_1_100px] flex-shrink flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
             <ActivityFeed
               events={liveEvents.events}
               connected={liveEvents.connected}
