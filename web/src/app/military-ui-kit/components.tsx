@@ -51,7 +51,7 @@ export const TacticalPanel = ({ children, title, className = "", contentClassNam
       <div className="relative z-10 bg-gradient-to-r from-transparent via-[#ff9500] to-transparent h-[2px] mb-4 opacity-50" />
     )}
 
-    <div className={`relative z-10 p-6 ${contentClassName}`}>
+    <div className={`relative z-10 ${contentClassName || "p-6"}`}>
       {title && (
         <div className="text-[#ff9500] text-sm uppercase tracking-[0.2em] font-bold mb-4">{title}</div>
       )}
