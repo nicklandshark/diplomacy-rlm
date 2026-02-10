@@ -10,7 +10,7 @@ export function PhaseTimeline({ phases, currentPhase, onSelectPhase }: PhaseTime
   const currentIndex = currentPhase ? phases.indexOf(currentPhase) : -1;
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-[#3a3a3a] scrollbar-track-transparent">
+    <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-[#3a3a3a] scrollbar-track-transparent">
       {phases.map((phase, idx) => {
         const isCurrent = idx === currentIndex;
         const isPast = idx < currentIndex;
@@ -22,7 +22,7 @@ export function PhaseTimeline({ phases, currentPhase, onSelectPhase }: PhaseTime
           <button
             key={phase}
             onClick={() => onSelectPhase(idx)}
-            className={`relative flex-shrink-0 w-10 h-10 border flex flex-col items-center justify-center transition-all ${
+            className={`relative flex-shrink-0 w-8 h-8 sm:w-9 sm:h-9 lg:w-10 lg:h-10 border flex flex-col items-center justify-center transition-all ${
               isCurrent
                 ? "border-[#ff9500] bg-[#ff9500]/10"
                 : isPast
@@ -35,10 +35,10 @@ export function PhaseTimeline({ phases, currentPhase, onSelectPhase }: PhaseTime
                 : "none",
             }}
           >
-            <span className={`text-[9px] font-bold leading-none ${isCurrent ? "text-[#ff9500]" : isPast ? "text-[#4a7c59]" : "text-[#808080]"}`}>
+            <span className={`text-[8px] sm:text-[9px] font-bold leading-none ${isCurrent ? "text-[#ff9500]" : isPast ? "text-[#4a7c59]" : "text-[#808080]"}`}>
               {season}{year.slice(2)}
             </span>
-            <span className={`text-[7px] uppercase leading-none mt-[2px] ${isCurrent ? "text-[#ff9500]/70" : isPast ? "text-[#4a7c59]/70" : "text-[#808080]/70"}`}>
+            <span className={`text-[6px] sm:text-[7px] uppercase leading-none mt-[2px] ${isCurrent ? "text-[#ff9500]/70" : isPast ? "text-[#4a7c59]/70" : "text-[#808080]/70"}`}>
               {type.charAt(0)}
             </span>
           </button>

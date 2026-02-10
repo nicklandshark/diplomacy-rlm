@@ -307,25 +307,25 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
     <div className="flex flex-col gap-2 h-[calc(100vh-80px)] bg-[#0a0a0a]">
       <PhaseTransition phase={nav.currentPhase} show={!!nav.currentPhase} />
 
-      {/* Top nav bar */}
-      <TacticalPanel className="flex items-center gap-3" contentClassName="p-2 flex flex-row items-center gap-3">
-        <span className="text-sm font-semibold text-[#ff9500] whitespace-nowrap">{gameId}</span>
-        <div className="w-px h-5 bg-[#3a3a3a] flex-shrink-0" />
-        
-        {/* Phase controls */}
-        <div className="flex items-center gap-1">
+      {/* Top nav bar - responsive spacing */}
+      <TacticalPanel className="flex items-center gap-1.5 sm:gap-2 lg:gap-3" contentClassName="p-1.5 sm:p-2 flex flex-row items-center gap-1.5 sm:gap-2 lg:gap-3">
+        <span className="text-xs sm:text-sm font-semibold text-[#ff9500] whitespace-nowrap">{gameId}</span>
+        <div className="w-px h-4 sm:h-5 bg-[#3a3a3a] flex-shrink-0" />
+
+        {/* Phase controls - responsive sizing */}
+        <div className="flex items-center gap-0.5 sm:gap-1">
           <button
             disabled={nav.isFirst}
             onClick={nav.goPrev}
-            className="px-2 py-1 text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             ◀
           </button>
           <button
             onClick={handlePlayToggle}
-            className={`px-2 py-1 text-[10px] font-bold uppercase border transition-all ${
-              playing 
-                ? "bg-[#ff9500] border-[#ff9500] text-[#0a0a0a]" 
+            className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase border transition-all ${
+              playing
+                ? "bg-[#ff9500] border-[#ff9500] text-[#0a0a0a]"
                 : "bg-[#2a2a2a] border-[#3a3a3a] text-[#808080] hover:border-[#4a4a4a]"
             }`}
           >
@@ -334,13 +334,13 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
           <button
             disabled={nav.isLast}
             onClick={nav.goNext}
-            className="px-2 py-1 text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             ▶
           </button>
         </div>
 
-        {/* Phase timeline */}
+        {/* Phase timeline - responsive */}
         <div className="flex-1 min-w-0 overflow-hidden">
           <PhaseTimeline
             phases={phases}
@@ -349,19 +349,20 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
           />
         </div>
 
-        {/* Status */}
-        <div className="w-px h-5 bg-[#3a3a3a] flex-shrink-0" />
-        <span className="flex items-center gap-1.5 flex-shrink-0 text-xs whitespace-nowrap">
+        {/* Status - responsive text */}
+        <div className="w-px h-4 sm:h-5 bg-[#3a3a3a] flex-shrink-0" />
+        <span className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[10px] sm:text-xs whitespace-nowrap">
           {liveEvents.connected ? (
             <>
-              <span className="relative flex h-2 w-2">
+              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4a7c59] opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4a7c59]" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-[#4a7c59]" />
               </span>
-              <span className="text-[#4a7c59] font-medium">{liveStep || "Live"}</span>
+              <span className="text-[#4a7c59] font-medium hidden sm:inline">{liveStep || "Live"}</span>
+              <span className="text-[#4a7c59] font-medium inline sm:hidden">●</span>
             </>
           ) : (
-            <span className="text-[#808080]">{phases.length} phase{phases.length !== 1 ? "s" : ""}</span>
+            <span className="text-[#808080] hidden sm:inline">{phases.length} phase{phases.length !== 1 ? "s" : ""}</span>
           )}
         </span>
       </TacticalPanel>
