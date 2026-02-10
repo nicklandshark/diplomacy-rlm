@@ -24,6 +24,8 @@ const RENDERED_TYPES = new Set([
   "memory.changed",
   "agent.error",
   "step.timeout",
+  "game.halt",
+  "game.end",
 ]);
 
 export function shouldRender(event: LiveEvent): boolean {
@@ -231,6 +233,24 @@ export default function ActivityItem({ event }: Props) {
             {event.power && <PowerBadge power={event.power} size="sm" />}
             <span className="text-orange-400 font-medium">{summary}</span>
           </div>
+        </div>
+      );
+    }
+
+    case "game.halt": {
+      const summary = (p.summary as string) || "Game halted";
+      return (
+        <div className="mx-2 my-2 px-3 py-2 rounded bg-red-950/60 border border-red-800 text-center">
+          <span className="text-red-400 font-semibold text-sm">{summary}</span>
+        </div>
+      );
+    }
+
+    case "game.end": {
+      const summary = (p.summary as string) || "Game ended";
+      return (
+        <div className="text-center text-gray-500 text-xs py-2 border-t border-gray-800/50">
+          --- {summary} ---
         </div>
       );
     }
