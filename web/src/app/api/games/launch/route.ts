@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
@@ -18,8 +18,29 @@ const VALID_BACKENDS = new Set([
   "openai", "portkey", "openrouter", "vercel", "vllm", "litellm", "anthropic", "azure_openai", "gemini",
 ]);
 
+/**
+ * Detect the best available Python runner.
+ * Returns { cmd, prefix } where spawn(cmd, [...prefix, ...cliArgs]).
+ *
+ * Priority: uv > diplomacy-rlm CLI > python -m
+ */
+function detectRunner(): { cmd: string; prefix: string[] } {
+  try {
+    execSync("uv --version", { stdio: "ignore", timeout: 3000 });
+    return { cmd: "uv", prefix: ["run", "diplomacy-rlm"] };
+  } catch {
+    // uv not found — try the CLI entry point directly (pip install -e .)
+    try {
+      execSync("diplomacy-rlm --help", { stdio: "ignore", timeout: 5000 });
+      return { cmd: "diplomacy-rlm", prefix: [] };
+    } catch {
+      // Last resort: invoke via python module
+      return { cmd: "python", prefix: ["-m", "rlm_diplomacy.cli"] };
+    }
+  }
+}
+
 function getRunsDir(): string {
-  // Use GAMES_DIR if set, otherwise default to ../runs (relative to web/)
   const dir = process.env.GAMES_DIR || "../runs";
   return path.resolve(process.cwd(), dir);
 }
@@ -104,13 +125,14 @@ export async function POST(request: Request) {
     const gameDir = path.join(runsDir, gameId);
 
     // Ensure game directory exists before writing metadata files.
-    // The CLI also creates it, but we need it now for .pid and .game_meta.json.
     fs.mkdirSync(gameDir, { recursive: true });
 
-    // Build CLI arguments
-    const args = [
-      "run",
-      "diplomacy-rlm",
+    // Detect runner: uv > diplomacy-rlm CLI > python -m
+    const runner = detectRunner();
+
+    // Build CLI arguments: runner.prefix handles the invocation method,
+    // then we append the actual diplomacy-rlm flags.
+    const cliFlags = [
       "--powers", powersUpper.join(","),
       "--backend", backend,
       "--backend-arg-for", `${backend}.model_name=${model}`,
@@ -120,17 +142,24 @@ export async function POST(request: Request) {
       "--log-repl",
       "--log-messages",
       "--log-memory-diff",
-      "--serve-api",
+      "--serve-web",
     ];
 
-    // Spawn detached process so it survives the API request
-    const child = spawn("uv", args, {
+    const args = [...runner.prefix, ...cliFlags];
+
+    // Log stdout/stderr to a file so startup failures are diagnosable
+    // (previously stdio: "ignore" swallowed all output).
+    const logFd = fs.openSync(path.join(gameDir, "launch.log"), "w");
+
+    // Spawn detached process — pass process.env so the child inherits
+    // all environment variables (API keys, PATH, etc.)
+    const child = spawn(runner.cmd, args, {
       cwd: projectRoot,
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", logFd, logFd],
+      env: { ...process.env },
     });
 
-    // Unref so the parent process can exit without waiting
     child.unref();
 
     // Write PID so the stop endpoint can kill the process later
@@ -148,6 +177,7 @@ export async function POST(request: Request) {
       gameId,
       status: "launched",
       pid: child.pid,
+      runner: runner.cmd,
     });
   } catch (err) {
     console.error("Failed to launch game:", err);

@@ -7,6 +7,7 @@ import importlib
 import json
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -440,6 +441,28 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "model_name=..., --backend-arg-for BACKEND.model_name=..., or --power-model "
                 "for each missing power."
             )
+
+        # Early API key check — fail now instead of mid-game.
+        _BACKEND_ENV_KEYS: dict[str, str] = {
+            "anthropic": "ANTHROPIC_API_KEY",
+            "openrouter": "OPENROUTER_API_KEY",
+            "openai": "OPENAI_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "azure_openai": "AZURE_OPENAI_API_KEY",
+        }
+        for backend_name in used_backends:
+            env_var = _BACKEND_ENV_KEYS.get(backend_name)
+            if not env_var:
+                continue
+            # Check if the key was provided via --backend-arg or env var
+            bk = config.backend_kwargs_for(config.powers[0])
+            if "api_key" not in bk and not os.environ.get(env_var):
+                raise ValueError(
+                    f"No API key found for backend '{backend_name}'. "
+                    f"Set the {env_var} environment variable:\n\n"
+                    f'  export {env_var}="your-key-here"\n\n'
+                    f"Or pass it via --backend-arg api_key=..."
+                )
     except (ImportError, ValueError) as exc:
         parser.error(str(exc))
 
@@ -507,14 +530,30 @@ def main(argv: Sequence[str] | None = None) -> None:
                     "LIVE_API_URL": f"http://127.0.0.1:{api_port}",
                     "PORT": str(web_port),
                 }
-                web_process = subprocess.Popen(
-                    ["bun", "run", "dev", "--port", str(web_port)],
-                    cwd=web_dir,
-                    env=web_env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                print(f"\nGame viewer: http://localhost:{web_port}/game/{game_id}\n")
+                # Detect JS runner: bun (preferred) → npx
+                if shutil.which("bun"):
+                    web_cmd = ["bun", "run", "dev", "--port", str(web_port)]
+                elif shutil.which("npx"):
+                    web_cmd = ["npx", "next", "dev", "--port", str(web_port)]
+                else:
+                    print(
+                        "\nError: neither bun nor npm/npx found. "
+                        "Install one of:\n"
+                        "  bun  → https://bun.sh/\n"
+                        "  npm  → https://nodejs.org/\n"
+                    )
+                    print(f"SSE API available at: http://127.0.0.1:{api_port}\n")
+                    web_cmd = None
+
+                if web_cmd:
+                    web_process = subprocess.Popen(
+                        web_cmd,
+                        cwd=web_dir,
+                        env=web_env,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    print(f"\nGame viewer: http://localhost:{web_port}/game/{game_id}\n")
             else:
                 print(f"\nWarning: web/ directory not found, skipping web viewer.\n")
                 print(f"SSE API available at: http://127.0.0.1:{api_port}\n")

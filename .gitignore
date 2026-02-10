@@ -5,8 +5,14 @@ __pycache__/
 .pytest_cache/
 **/*.egg-info
 
-# So you can run a test game without committing it
+# Game output directories
 test_game_outputs/
+runs/
+game_output/
 
 # Environment variables
 .env
+web/.env.local
+
+# Logs
+*.log
