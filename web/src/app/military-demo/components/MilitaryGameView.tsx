@@ -411,27 +411,29 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
         {/* Center: Map + Activity (unified) */}
         <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0">
-          {/* Map area - fills width and height */}
-          <div className="flex-1 min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
+          {/* Map area - scales by aspect ratio, centered */}
+          <div className="flex items-center justify-center flex-shrink-0 w-full" style={{ containerType: 'size' }}>
             {loading ? (
-              <div className="flex items-center justify-center h-full text-[#808080]">
+              <div className="flex items-center justify-center h-64 text-[#808080]">
                 Loading phase data...
               </div>
             ) : (
-              <DiplomacyMap
-                svgContent={svgContent}
-                state={state}
-                orders={displayOrders || undefined}
-                results={results}
-                hoveredOrder={hoveredOrder}
-                focusLocation={focusLocation}
-                revealedOrderCount={playing ? revealedOrderCount : -1}
-              />
+              <div className="w-full max-h-full">
+                <DiplomacyMap
+                  svgContent={svgContent}
+                  state={state}
+                  orders={displayOrders || undefined}
+                  results={results}
+                  hoveredOrder={hoveredOrder}
+                  focusLocation={focusLocation}
+                  revealedOrderCount={playing ? revealedOrderCount : -1}
+                />
+              </div>
             )}
           </div>
 
-          {/* Activity feed below map — fixed height tactical panel */}
-          <TacticalPanel className="h-44 flex-shrink-0 flex flex-col" contentClassName="p-2 flex flex-col flex-1 min-h-0">
+          {/* Activity feed below map — fills remaining vertical space */}
+          <TacticalPanel className="flex-1 flex-shrink flex flex-col min-h-0" contentClassName="p-0 flex flex-col flex-1 min-h-0">
             <ActivityFeed
               events={liveEvents.events}
               connected={liveEvents.connected}
