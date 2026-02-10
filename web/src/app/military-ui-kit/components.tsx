@@ -27,7 +27,7 @@ export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?
   </div>
 );
 
-// TacticalPanel - Main container with rivets
+// TacticalPanel - Main container with rivets and optional inset title well
 export const TacticalPanel = ({ children, title, className = "", contentClassName = "" }: any) => (
   <div className={`relative bg-[#2a2a2a] border-4 overflow-hidden ${className}`}
     style={{
@@ -35,11 +35,13 @@ export const TacticalPanel = ({ children, title, className = "", contentClassNam
       boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 3px rgba(255,255,255,0.05), 0 6px 12px rgba(0,0,0,0.4)",
       background: "linear-gradient(135deg, #2a2a2a 0%, #252525 50%, #2a2a2a 100%)"
     }}>
+    {/* Corner rivets */}
     <Rivet style={{ left: "12px", top: "12px" }} />
     <Rivet style={{ right: "12px", top: "12px" }} />
     <Rivet style={{ left: "12px", bottom: "12px" }} />
     <Rivet style={{ right: "12px", bottom: "12px" }} />
 
+    {/* Edge rivets */}
     {[25, 50, 75].map((percent) => (
       <div key={`top-${percent}`}>
         <Rivet style={{ left: `${percent}%`, top: "12px", transform: "translateX(-50%)" }} />
@@ -47,14 +49,33 @@ export const TacticalPanel = ({ children, title, className = "", contentClassNam
       </div>
     ))}
 
+    {/* Inset title well - positioned to avoid rivets */}
     {title && (
-      <div className="relative z-10 bg-gradient-to-r from-transparent via-[#ff9500] to-transparent h-[2px] mb-4 opacity-50" />
+      <div className="relative z-10 mx-6 sm:mx-8 mt-6 mb-3" style={{
+        background: "linear-gradient(180deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,149,0,0.1)",
+        border: "2px solid #0a0a0a",
+        borderRadius: "2px"
+      }}>
+        {/* Inner glow accent */}
+        <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+          background: "radial-gradient(ellipse at top, rgba(255,149,0,0.1) 0%, transparent 50%)"
+        }} />
+
+        {/* Title text */}
+        <div className="relative px-3 sm:px-4 py-1.5 sm:py-2 text-[#ff9500] text-xs sm:text-sm uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
+          textShadow: "0 0 8px rgba(255,149,0,0.4), 0 1px 2px rgba(0,0,0,0.8)"
+        }}>
+          {title}
+        </div>
+
+        {/* Bottom accent line */}
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#ff9500] to-transparent opacity-20" />
+      </div>
     )}
 
+    {/* Content area */}
     <div className={`relative z-10 ${contentClassName || "p-6"}`}>
-      {title && (
-        <div className="text-[#ff9500] text-sm uppercase tracking-[0.2em] font-bold mb-4">{title}</div>
-      )}
       {children}
     </div>
   </div>
