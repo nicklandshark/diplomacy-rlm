@@ -514,8 +514,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
             })}
           </div>
 
-          {/* Memory content - gets its own TacticalPanel */}
-          <TacticalPanel title="MEMORY" className="flex-1 flex min-h-0" contentClassName="p-3 flex flex-col flex-1 min-h-0 overflow-auto">
+          {/* Memory content - vertical stack with title above content */}
+          <TacticalPanel title="MEMORY" className="flex-1 flex flex-col min-h-0" contentClassName="p-3 flex flex-col flex-1 min-h-0 overflow-auto">
             {memoryLoading && (
               <div className="text-[#808080] text-sm">Loading memory...</div>
             )}

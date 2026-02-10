@@ -27,30 +27,22 @@ export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?
   </div>
 );
 
-// TacticalPanel - Main container with rivets and optional inset title well
-export const TacticalPanel = ({ children, title, className = "", contentClassName = "" }: any) => (
+// TacticalPanel - Main container with subtle corner rivets and optional inset title well
+export const TacticalPanel = ({ children, title, verticalTitle = false, className = "", contentClassName = "" }: any) => (
   <div className={`relative bg-[#2a2a2a] border-4 overflow-hidden ${className}`}
     style={{
       borderColor: "#1a1a1a",
       boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 3px rgba(255,255,255,0.05), 0 6px 12px rgba(0,0,0,0.4)",
       background: "linear-gradient(135deg, #2a2a2a 0%, #252525 50%, #2a2a2a 100%)"
     }}>
-    {/* Corner rivets */}
-    <Rivet style={{ left: "12px", top: "12px" }} />
-    <Rivet style={{ right: "12px", top: "12px" }} />
-    <Rivet style={{ left: "12px", bottom: "12px" }} />
-    <Rivet style={{ right: "12px", bottom: "12px" }} />
+    {/* Corner rivets only - smaller and more subtle */}
+    <Rivet size={6} style={{ left: "8px", top: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ right: "8px", top: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ left: "8px", bottom: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ right: "8px", bottom: "8px", opacity: 0.6 }} />
 
-    {/* Edge rivets */}
-    {[25, 50, 75].map((percent) => (
-      <div key={`top-${percent}`}>
-        <Rivet style={{ left: `${percent}%`, top: "12px", transform: "translateX(-50%)" }} />
-        <Rivet style={{ left: `${percent}%`, bottom: "12px", transform: "translateX(-50%)" }} />
-      </div>
-    ))}
-
-    {/* Inset title well - positioned to avoid rivets */}
-    {title && (
+    {/* Inset title well - horizontal or vertical */}
+    {title && !verticalTitle && (
       <div className="relative z-10 mx-6 sm:mx-8 mt-6 mb-3" style={{
         background: "linear-gradient(180deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
         boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,149,0,0.1)",
@@ -71,6 +63,37 @@ export const TacticalPanel = ({ children, title, className = "", contentClassNam
 
         {/* Bottom accent line */}
         <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#ff9500] to-transparent opacity-20" />
+      </div>
+    )}
+
+    {/* Vertical title well - rotated 90 degrees */}
+    {title && verticalTitle && (
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10" style={{
+        writingMode: "vertical-rl",
+        textOrientation: "mixed",
+        transform: "translateY(-50%)"
+      }}>
+        <div className="relative py-3 sm:py-4 px-1.5 sm:px-2" style={{
+          background: "linear-gradient(90deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+          boxShadow: "inset 2px 0 6px rgba(0,0,0,0.8), inset -1px 0 2px rgba(255,255,255,0.03), 1px 0 0 rgba(255,149,0,0.1)",
+          border: "2px solid #0a0a0a",
+          borderRadius: "2px"
+        }}>
+          {/* Inner glow accent */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+            background: "radial-gradient(ellipse at left, rgba(255,149,0,0.1) 0%, transparent 50%)"
+          }} />
+
+          {/* Title text */}
+          <div className="relative text-[#ff9500] text-xs sm:text-sm uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
+            textShadow: "0 0 8px rgba(255,149,0,0.4), 0 1px 2px rgba(0,0,0,0.8)"
+          }}>
+            {title}
+          </div>
+
+          {/* Side accent line */}
+          <div className="absolute left-0 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-[#ff9500] to-transparent opacity-20" />
+        </div>
       </div>
     )}
 
