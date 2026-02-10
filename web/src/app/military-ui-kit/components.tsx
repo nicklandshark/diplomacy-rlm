@@ -28,7 +28,7 @@ export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?
 );
 
 // TacticalPanel - Main container with rivets
-export const TacticalPanel = ({ children, title, className = "" }: any) => (
+export const TacticalPanel = ({ children, title, className = "", contentClassName = "" }: any) => (
   <div className={`relative bg-[#2a2a2a] border-4 overflow-hidden ${className}`}
     style={{
       borderColor: "#1a1a1a",
@@ -51,7 +51,7 @@ export const TacticalPanel = ({ children, title, className = "" }: any) => (
       <div className="relative z-10 bg-gradient-to-r from-transparent via-[#ff9500] to-transparent h-[2px] mb-4 opacity-50" />
     )}
 
-    <div className="relative z-10 p-6">
+    <div className={`relative z-10 p-6 ${contentClassName}`}>
       {title && (
         <div className="text-[#ff9500] text-sm uppercase tracking-[0.2em] font-bold mb-4">{title}</div>
       )}

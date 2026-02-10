@@ -44,3 +44,46 @@ body {
     display: none;
   }
 }
+
+/* Military theme utilities */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+  &::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+}
+
+@utility text-glow-orange {
+  text-shadow: 0 0 10px rgba(255, 149, 0, 0.5), 0 0 20px rgba(255, 149, 0, 0.3);
+}
+
+@utility text-glow-green {
+  text-shadow: 0 0 10px rgba(74, 124, 89, 0.5), 0 0 20px rgba(74, 124, 89, 0.3);
+}
+
+@utility border-glow-orange {
+  box-shadow: 0 0 12px rgba(255, 149, 0, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+@utility border-glow-green {
+  box-shadow: 0 0 12px rgba(74, 124, 89, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Transition utilities */
+@utility transition-military {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
