@@ -369,8 +369,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
       {/* Main content */}
       <div className="flex gap-2 flex-1 min-h-0">
-        {/* Left sidebar */}
-        <TacticalPanel title="INTELLIGENCE" className="w-72 flex-shrink-0 flex flex-col min-h-0" contentClassName="p-2 flex flex-col flex-1 min-h-0">
+        {/* Left sidebar - responsive width */}
+        <TacticalPanel title="INTELLIGENCE" className="w-64 lg:w-80 xl:w-96 flex-shrink-0 flex flex-col min-h-0" contentClassName="p-2 flex flex-col flex-1 min-h-0">
           <div className="flex border-b border-[#2a2a2a]">
             {(["orders", "messages", "summary"] as LeftTab[]).map((tab) => (
               <button
@@ -452,8 +452,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
           </TacticalPanel>
         </div>
 
-        {/* Right sidebar: Memory with affixed tabs */}
-        <div className="w-72 flex-shrink-0 flex flex-row min-h-0 gap-0">
+        {/* Right sidebar: Memory with affixed tabs - responsive width */}
+        <div className="w-64 lg:w-80 xl:w-96 flex-shrink-0 flex flex-row min-h-0 gap-0">
           {/* Vertical power tabs - separate container */}
           <div className="w-14 flex-shrink-0 flex flex-col border-r-2 border-[#1a1a1a] py-1 overflow-y-auto" style={{
             background: 'linear-gradient(to right, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)'
