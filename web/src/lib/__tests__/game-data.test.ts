@@ -95,7 +95,9 @@ import {
   readMemory,
   readAllMessages,
   readGameLog,
+  readGameSummary,
 } from "../game-data";
+import { phaseSort } from "../constants";
 
 // ═════════════════════════════════════════════════════════════════════════════
 // TESTS
@@ -133,8 +135,8 @@ describe("game-data.ts", () => {
       const games = listGames();
       expect(games).toHaveLength(1);
       expect(games[0].id).toBe("game1");
-      expect(games[0].phases).toEqual(["F1901M", "S1901M"]);
-      expect(games[0].lastPhase).toBe("S1901M");
+      expect(games[0].phases).toEqual(["S1901M", "F1901M"]);
+      expect(games[0].lastPhase).toBe("F1901M");
       expect(games[0].powers).toContain("FRANCE");
       expect(games[0].powers).toContain("GERMANY");
     });
@@ -204,10 +206,10 @@ describe("game-data.ts", () => {
       expect(listPhases("game99")).toEqual([]);
     });
 
-    it("returns sorted phase names", () => {
+    it("returns chronologically sorted phase names", () => {
       seedGame("game1", ["S1902M", "F1901M", "S1901M"]);
       const phases = listPhases("game1");
-      expect(phases).toEqual(["F1901M", "S1901M", "S1902M"]);
+      expect(phases).toEqual(["S1901M", "F1901M", "S1902M"]);
     });
 
     it("ignores non-directory entries in snapshots dir", () => {
@@ -426,6 +428,100 @@ describe("game-data.ts", () => {
       const events = readGameLog("game1");
       expect(events).toHaveLength(1);
       expect(events[0].event_type).toBe("game.halt");
+    });
+  });
+
+  // ── Phase Sort Regression Tests ──────────────────────────────────────────
+  describe("phaseSort (regression: alphabetical→chronological)", () => {
+    it("sorts Spring before Fall before Winter within same year", () => {
+      const phases = ["W1901A", "F1901M", "S1901M"];
+      expect(phases.sort(phaseSort)).toEqual(["S1901M", "F1901M", "W1901A"]);
+    });
+
+    it("sorts years numerically ascending", () => {
+      const phases = ["S1903M", "S1901M", "S1902M"];
+      expect(phases.sort(phaseSort)).toEqual(["S1901M", "S1902M", "S1903M"]);
+    });
+
+    it("sorts Movement before Retreat before Adjustment within same season", () => {
+      const phases = ["S1901R", "S1901M"];
+      expect(phases.sort(phaseSort)).toEqual(["S1901M", "S1901R"]);
+    });
+
+    it("sorts a full 3-year game chronologically", () => {
+      const input = [
+        "F1902M", "W1901A", "S1903M", "S1901M", "F1901M",
+        "W1902A", "S1902M", "F1903M", "W1903A", "S1903R",
+      ];
+      expect(input.sort(phaseSort)).toEqual([
+        "S1901M", "F1901M", "W1901A",
+        "S1902M", "F1902M", "W1902A",
+        "S1903M", "S1903R", "F1903M", "W1903A",
+      ]);
+    });
+
+    it("handles retreat phases in correct position", () => {
+      const phases = ["F1901M", "F1901R", "S1901M"];
+      expect(phases.sort(phaseSort)).toEqual(["S1901M", "F1901M", "F1901R"]);
+    });
+  });
+
+  // ── listPhases chronological regression ──────────────────────────────────
+  describe("listPhases chronological ordering (regression)", () => {
+    it("returns phases in chronological order across multiple years", () => {
+      seedGame("chrono1", [
+        "F1901M", "W1901A", "S1902M", "S1901M", "F1902M",
+      ]);
+      expect(listPhases("chrono1")).toEqual([
+        "S1901M", "F1901M", "W1901A", "S1902M", "F1902M",
+      ]);
+    });
+
+    it("picks up newly added phases on disk", () => {
+      seedGame("live1", ["S1901M"]);
+      expect(listPhases("live1")).toEqual(["S1901M"]);
+
+      // Simulate orchestrator saving a new snapshot
+      const newPhaseDir = path.join(tmpDir, "live1", "snapshots", "F1901M");
+      fs.mkdirSync(newPhaseDir, { recursive: true });
+
+      // Re-read should include the new phase in correct order
+      expect(listPhases("live1")).toEqual(["S1901M", "F1901M"]);
+    });
+
+    it("maintains chronological order in listGames().phases", () => {
+      seedGame("game1", ["W1901A", "S1901M", "F1901M"], {
+        state: { units: { FRANCE: ["A PAR"] } },
+      });
+      const games = listGames();
+      expect(games[0].phases).toEqual(["S1901M", "F1901M", "W1901A"]);
+      expect(games[0].lastPhase).toBe("W1901A");
+    });
+  });
+
+  // ── readGameSummary chronological regression ─────────────────────────────
+  describe("readGameSummary with chronological phases (regression)", () => {
+    it("builds SC history in correct chronological order", () => {
+      // Seed with phases in random disk order but with per-phase state
+      const mkState = (scs: number) => ({
+        units: { FRANCE: Array(scs).fill("A PAR") },
+        centers: { FRANCE: Array(scs).fill("PAR") },
+      });
+
+      const gameDir = path.join(tmpDir, "summary1", "snapshots");
+
+      // Create phases out of order on disk
+      for (const [phase, scs] of [["F1901M", 5], ["S1901M", 3], ["W1901A", 6]] as const) {
+        const dir = path.join(gameDir, phase);
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, "game_state.json"), JSON.stringify(mkState(scs)));
+      }
+
+      const summary = readGameSummary("summary1");
+      expect(summary).not.toBeNull();
+      // SC history should follow chronological order: S1901M(3), F1901M(5), W1901A(6)
+      expect(summary!.phases).toEqual(["S1901M", "F1901M", "W1901A"]);
+      expect(summary!.scHistory["FRANCE"]).toEqual([3, 5, 6]);
     });
   });
 });

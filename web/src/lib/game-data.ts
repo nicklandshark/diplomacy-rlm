@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { GameState, PhaseOrders, PhaseResults, PhaseMessages, Message, GameLogEvent, GameSummary } from "./types";
+import { phaseSort } from "./constants";
 
 function getGamesDir(): string {
   const dir = process.env.GAMES_DIR || "../runs";
@@ -27,7 +28,7 @@ export function listGames(): GameSummary[] {
 
     const phases = fs.readdirSync(snapshotsDir)
       .filter((p) => fs.statSync(path.join(snapshotsDir, p)).isDirectory())
-      .sort();
+      .sort(phaseSort);
 
     if (phases.length === 0) continue;
 
@@ -75,7 +76,7 @@ export function listPhases(gameId: string): string[] {
         return false;
       }
     })
-    .sort();
+    .sort(phaseSort);
 }
 
 export function readPhaseState(gameId: string, phase: string): GameState | null {

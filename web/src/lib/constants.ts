@@ -34,6 +34,20 @@ export function phaseDisplayName(phase: string): string {
   return `${season} ${year} ${type}`;
 }
 
+const SEASON_ORDER: Record<string, number> = { S: 0, F: 1, W: 2 };
+const TYPE_ORDER: Record<string, number> = { M: 0, R: 1, A: 2 };
+
+/** Chronological sort for Diplomacy phase strings like S1901M, F1901M, W1901A. */
 export function phaseSort(a: string, b: string): number {
-  return a.localeCompare(b);
+  const yearA = parseInt(a.slice(1, 5), 10);
+  const yearB = parseInt(b.slice(1, 5), 10);
+  if (yearA !== yearB) return yearA - yearB;
+
+  const seasonA = SEASON_ORDER[a[0]] ?? 9;
+  const seasonB = SEASON_ORDER[b[0]] ?? 9;
+  if (seasonA !== seasonB) return seasonA - seasonB;
+
+  const typeA = TYPE_ORDER[a[5]] ?? 9;
+  const typeB = TYPE_ORDER[b[5]] ?? 9;
+  return typeA - typeB;
 }

@@ -15,7 +15,8 @@ interface UseLiveEventsOptions {
 }
 
 const RECONNECT_DELAY_MS = 2000;
-const MAX_RETRIES = 5;
+const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_RETRIES = Infinity; // SSE should reconnect as long as the page is open
 
 export function useLiveEvents(
   gameId: string,
@@ -83,8 +84,9 @@ export function useLiveEvents(
           return;
         }
 
+        const delay = Math.min(RECONNECT_DELAY_MS * Math.pow(1.5, retryCount - 1), MAX_RECONNECT_DELAY_MS);
         setState(prev => ({ ...prev, connected: false, error: "Reconnecting..." }));
-        reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
+        reconnectTimer = setTimeout(connect, delay);
       };
     }
 
