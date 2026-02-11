@@ -1,0 +1,179 @@
+{
+  "builds": {
+    "AUSTRIA": {
+      "count": 0,
+      "homes": []
+    },
+    "ENGLAND": {
+      "count": 0,
+      "homes": []
+    },
+    "FRANCE": {
+      "count": 0,
+      "homes": []
+    },
+    "GERMANY": {
+      "count": 0,
+      "homes": []
+    },
+    "ITALY": {
+      "count": 0,
+      "homes": []
+    },
+    "RUSSIA": {
+      "count": 1,
+      "homes": [
+        "MOS",
+        "SEV",
+        "STP",
+        "WAR"
+      ]
+    },
+    "TURKEY": {
+      "count": 0,
+      "homes": []
+    }
+  },
+  "centers": {
+    "AUSTRIA": [
+      "BUD",
+      "TRI",
+      "VIE",
+      "GRE",
+      "BUL"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "BRE",
+      "MAR",
+      "PAR",
+      "SPA",
+      "BEL"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "SEV",
+      "STP",
+      "WAR",
+      "RUM",
+      "NWY"
+    ],
+    "TURKEY": []
+  },
+  "civil_disorder": {
+    "AUSTRIA": 0,
+    "ENGLAND": 0,
+    "FRANCE": 0,
+    "GERMANY": 0,
+    "ITALY": 0,
+    "RUSSIA": 0,
+    "TURKEY": 0
+  },
+  "homes": {
+    "AUSTRIA": [
+      "BUD",
+      "TRI",
+      "VIE"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "BRE",
+      "MAR",
+      "PAR"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "SEV",
+      "STP",
+      "WAR"
+    ],
+    "TURKEY": []
+  },
+  "influence": {
+    "AUSTRIA": [
+      "BUD",
+      "ALB",
+      "VIE",
+      "VEN",
+      "GRE",
+      "TRI",
+      "BUL",
+      "AEG"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "ENG",
+      "BRE",
+      "PIC",
+      "BEL",
+      "PAR",
+      "GAS",
+      "SPA",
+      "NTH",
+      "BUR",
+      "MAR",
+      "MAO"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "MOS",
+      "STP",
+      "UKR",
+      "LVN",
+      "BLA",
+      "GAL",
+      "SIL",
+      "SEV",
+      "BAL",
+      "WAR",
+      "RUM",
+      "NWY",
+      "PRU"
+    ],
+    "TURKEY": []
+  },
+  "name": "W1905A",
+  "note": "",
+  "retreats": {
+    "AUSTRIA": {},
+    "ENGLAND": {},
+    "FRANCE": {},
+    "GERMANY": {},
+    "ITALY": {},
+    "RUSSIA": {},
+    "TURKEY": {}
+  },
+  "timestamp": 1770411137685123,
+  "units": {
+    "AUSTRIA": [
+      "A VIE",
+      "A BUD",
+      "A TRI",
+      "F AEG"
+    ],
+    "ENGLAND": [],
+    "FRANCE": [
+      "A PAR",
+      "F NTH",
+      "A BUR",
+      "A MAR",
+      "F MAO"
+    ],
+    "GERMANY": [],
+    "ITALY": [],
+    "RUSSIA": [
+      "A SIL",
+      "F BAL",
+      "F RUM",
+      "F NWY",
+      "A PRU"
+    ],
+    "TURKEY": []
+  },
+  "zobrist_hash": "786765162591098996"
+}

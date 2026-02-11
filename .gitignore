@@ -16,3 +16,6 @@ web/.env.local
 
 # Logs
 *.log
+
+# Git worktrees
+.worktrees/
