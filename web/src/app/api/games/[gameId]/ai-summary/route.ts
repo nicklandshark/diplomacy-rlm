@@ -103,6 +103,7 @@ async function callAnthropic(
       system,
       messages: [{ role: "user", content: userMessage }],
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const body = await res.text();
@@ -136,6 +137,7 @@ async function callOpenAICompatible(
         { role: "user", content: userMessage },
       ],
     }),
+    signal: AbortSignal.timeout(30_000),
   });
   if (!res.ok) {
     const body = await res.text();

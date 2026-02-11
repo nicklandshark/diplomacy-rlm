@@ -16,7 +16,7 @@ export function useAllMessages(gameId: string, refreshKey: number = 0) {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`/api/games/${gameId}/messages`)
+    fetch(`/api/games/${gameId}/messages`, { signal: AbortSignal.timeout(10_000) })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: Message[]) => {
         if (!cancelled) {

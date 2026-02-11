@@ -81,7 +81,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/games/${gameId}/summary`, { cache: "no-store" })
+    fetch(`/api/games/${gameId}/summary`, { cache: "no-store", signal: AbortSignal.timeout(10_000) })
       .then(r => r.ok ? r.json() : null)
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -93,7 +93,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
     let cancelled = false;
     setAiError(null);
     setAiLoading(true);
-    fetch(`/api/games/${gameId}/ai-summary?phase=${encodeURIComponent(currentPhase)}`)
+    fetch(`/api/games/${gameId}/ai-summary?phase=${encodeURIComponent(currentPhase)}`, { signal: AbortSignal.timeout(30_000) })
       .then(r => {
         if (!r.ok) return r.json().then(e => { throw new Error(e.error || "Failed"); });
         return r.json();
@@ -118,7 +118,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
     setAiLoading(true);
     setAiError(null);
     const forceParam = force ? "&force=true" : "";
-    fetch(`/api/games/${gameId}/ai-summary?phase=${encodeURIComponent(currentPhase)}${forceParam}`)
+    fetch(`/api/games/${gameId}/ai-summary?phase=${encodeURIComponent(currentPhase)}${forceParam}`, { signal: AbortSignal.timeout(30_000) })
       .then(r => {
         if (!r.ok) return r.json().then(e => { throw new Error(e.error || "Failed"); });
         return r.json();

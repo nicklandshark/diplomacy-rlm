@@ -10,7 +10,7 @@ export function useGameLog(gameId: string, refreshKey: number = 0) {
     if (!gameId) return;
     let cancelled = false;
 
-    fetch(`/api/games/${gameId}/log`, { cache: "no-store" })
+    fetch(`/api/games/${gameId}/log`, { cache: "no-store", signal: AbortSignal.timeout(10_000) })
       .then((r) => (r.ok ? r.json() : []))
       .then((data: GameLogEvent[]) => {
         if (!cancelled) setEvents(data);

@@ -331,7 +331,7 @@ export default function GameView({ gameId, initialPhases, svgContent }: Props) {
                 onClick={async () => {
                   if (!confirm("Stop this game? The process will be terminated.")) return;
                   try {
-                    const res = await fetch(`/api/games/${gameId}/stop`, { method: "POST" });
+                    const res = await fetch(`/api/games/${gameId}/stop`, { method: "POST", signal: AbortSignal.timeout(10_000) });
                     const data = await res.json();
                     if (!res.ok) alert(data.error || "Failed to stop game");
                   } catch { alert("Failed to stop game"); }

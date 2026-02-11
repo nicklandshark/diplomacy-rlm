@@ -28,11 +28,12 @@ export function useGameData(gameId: string, phase: string | null, refreshKey: nu
     setData(prev => ({ ...prev, loading: true, error: null }));
 
     const base = `/api/games/${gameId}/phases/${phase}`;
+    const opts = { signal: AbortSignal.timeout(10_000) };
     Promise.all([
-      fetch(`${base}/state`).then(r => r.ok ? r.json() : null),
-      fetch(`${base}/orders`).then(r => r.ok ? r.json() : null),
-      fetch(`${base}/results`).then(r => r.ok ? r.json() : null),
-      fetch(`${base}/messages`).then(r => r.ok ? r.json() : null),
+      fetch(`${base}/state`, opts).then(r => r.ok ? r.json() : null),
+      fetch(`${base}/orders`, opts).then(r => r.ok ? r.json() : null),
+      fetch(`${base}/results`, opts).then(r => r.ok ? r.json() : null),
+      fetch(`${base}/messages`, opts).then(r => r.ok ? r.json() : null),
     ]).then(([state, orders, results, messages]) => {
       if (!cancelled) {
         setData({ state, orders, results, messages, loading: false, error: null });
@@ -57,7 +58,7 @@ export function useMemory(gameId: string, power: string, phase?: string, refresh
     if (!gameId || !power) return;
     setLoading(true);
     const url = `/api/games/${gameId}/memory/${power}${phase ? `?phase=${phase}` : ""}`;
-    fetch(url)
+    fetch(url, { signal: AbortSignal.timeout(10_000) })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         setContent(data?.content || null);
