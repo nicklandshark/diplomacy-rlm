@@ -2,6 +2,17 @@ import fs from "fs";
 import path from "path";
 import { listGames, readGameSummary } from "./game-data";
 
+/**
+ * Agent rating engine for Diplomacy runs.
+ *
+ * Design goals:
+ * - Keep the wire format stable for current UI consumers (`computeAgentEloRatings`)
+ * - Expose a modular bundle contract for future multi-component scoring systems
+ * - Keep implementation deterministic from local game artifacts (`summary.json` + `.game_meta.json`)
+ *
+ * Current scoring system:
+ * - `elo_core`: pairwise Elo approximation over final supply-center standings
+ */
 const DEFAULT_ELO = 1500;
 const ELO_K = 24;
 const SUPPORTED_SYSTEMS = ["elo_core"] as const;
@@ -39,15 +50,20 @@ interface PowerStanding {
 }
 
 export interface AgentEloRating {
+  /** Stable agent identity: `${backend}:${model}` */
   agentKey: string;
   backend: string;
   model: string;
+  /** Final rounded rating for the selected system */
   rating: number;
+  /** Number of completed games this agent appears in */
   games: number;
+  /** Number of pairwise matchups processed across completed games */
   matchups: number;
   wins: number;
   draws: number;
   losses: number;
+  /** Most recent game id seen while computing the table */
   lastGameId?: string;
 }
 
@@ -59,12 +75,15 @@ export interface AgentRatingRecord {
   model: string;
   rating: number;
   games: number;
+  /** System-level outcome buckets (semantic meaning depends on system) */
   outcomes: {
     wins: number;
     draws: number;
     losses: number;
   };
+  /** Component-level contributions for composite systems (future-proof) */
   components: Record<string, number>;
+  /** Operational metadata used for diagnostics/audit */
   diagnostics: {
     matchups: number;
     lastGameId?: string;
@@ -72,16 +91,22 @@ export interface AgentRatingRecord {
 }
 
 export interface RatingSystemResult {
+  /** Machine-readable system id (`elo_core`, future `reliability`, etc.) */
   id: RatingSystemId;
+  /** Human readable title for dashboards */
   label: string;
+  /** System-specific semantic version */
   version: string;
+  /** Public calculation parameters (for reproducibility) */
   parameters: Record<string, number>;
+  /** Dataset coverage summary for this system invocation */
   sample: {
     totalGamesSeen: number;
     completedGamesUsed: number;
     agentsBeforeFilters: number;
     agentsAfterFilters: number;
   };
+  /** Post-processing filters applied after computing raw ratings */
   filters: {
     minGames: number;
     limit: number | null;
@@ -90,8 +115,10 @@ export interface RatingSystemResult {
 }
 
 export interface RatingsBundle {
+  /** API generation timestamp in ISO-8601 UTC */
   generatedAt: string;
   schemaVersion: "v2";
+  /** Echo of normalized request options used for this result */
   request: {
     systems: RatingSystemId[];
     minGames: number;
@@ -105,8 +132,11 @@ export interface RatingsBundle {
 }
 
 export interface RatingsOptions {
+  /** Requested systems; defaults to `["elo_core"]` */
   systems?: RatingSystemId[];
+  /** Remove agents with fewer than N games after computing system results */
   minGames?: number;
+  /** Return top N rows per system; 0/undefined means unbounded */
   limit?: number;
 }
 
@@ -188,6 +218,7 @@ function computeEloCoreResult(): RatingSystemResult {
 
   for (const game of games) {
     const summary = readGameSummary(game.id);
+    // Elo only uses completed games with at least two powers in standings.
     if (!summary?.gameOver || summary.finalStandings.length < 2) continue;
     completedGamesUsed += 1;
 
@@ -213,10 +244,12 @@ function computeEloCoreResult(): RatingSystemResult {
       if (agent) agent.games += 1;
     }
 
+    // Pairwise pass across all powers in the completed game.
     for (let i = 0; i < standings.length; i += 1) {
       for (let j = i + 1; j < standings.length; j += 1) {
         const a = standings[i];
         const b = standings[j];
+        // Skip self-matchups if same backend+model played multiple powers.
         if (a.backend === b.backend && a.model === b.model) continue;
 
         const ratingA = ensureAgent(table, a.backend, a.model);
@@ -294,6 +327,10 @@ function computeEloCoreResult(): RatingSystemResult {
   };
 }
 
+/**
+ * Parse comma-separated requested systems from query input.
+ * Unknown ids are ignored; if nothing valid remains we default to `elo_core`.
+ */
 export function parseRatingSystems(raw: string | null | undefined): RatingSystemId[] {
   if (!raw) return ["elo_core"];
   const parsed = raw
@@ -306,6 +343,14 @@ export function parseRatingSystems(raw: string | null | undefined): RatingSystem
   return systems.length > 0 ? Array.from(new Set(systems)) : ["elo_core"];
 }
 
+/**
+ * Main modular entrypoint used by `/api/agents/elo`.
+ *
+ * Pipeline:
+ * 1) Compute raw per-system ratings
+ * 2) Apply uniform response-level filters (`minGames`, `limit`)
+ * 3) Return an auditable bundle with request echo + capabilities
+ */
 export function computeAgentRatings(options: RatingsOptions = {}): RatingsBundle {
   const requestedRaw: RatingSystemId[] =
     options.systems && options.systems.length > 0 ? options.systems : ["elo_core"];
@@ -351,6 +396,9 @@ export function computeAgentRatings(options: RatingsOptions = {}): RatingsBundle
   };
 }
 
+/**
+ * Compatibility adapter used by older consumers expecting the pre-bundle format.
+ */
 export function toLegacyEloRatings(records: AgentRatingRecord[]): AgentEloRating[] {
   return records.map((entry) => ({
     agentKey: entry.agentKey,
@@ -366,6 +414,9 @@ export function toLegacyEloRatings(records: AgentRatingRecord[]): AgentEloRating
   }));
 }
 
+/**
+ * Legacy one-shot helper used by existing leaderboard routes/components.
+ */
 export function computeAgentEloRatings(): AgentEloRating[] {
   return toLegacyEloRatings(computeEloCoreResult().ratings);
 }
