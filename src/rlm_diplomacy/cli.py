@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Sequence
 from typing import Any
 
@@ -567,16 +568,24 @@ def main(argv: Sequence[str] | None = None) -> None:
         orchestrator.run()
     finally:
         emitter.close()
+        if start_sse:
+            # Grace period: the SSE generator checks _bus._closed every 0.5s,
+            # then sends an "event: close" message.  Give the daemon uvicorn
+            # thread enough time to flush that final message to connected
+            # clients before the process exits and kills all daemon threads.
+            time.sleep(2)
+
+            # Clean up port and PID files so stale markers don't confuse the
+            # web viewer after the game process exits.
+            game_dir_abs = os.path.abspath(args.game_dir)
+            for marker in (".pid", ".api_port"):
+                try:
+                    os.unlink(os.path.join(game_dir_abs, marker))
+                except OSError:
+                    pass
         if web_process is not None:
             web_process.terminate()
             web_process.wait(timeout=5)
-        # Clean up PID file
-        if start_sse:
-            pid_file = os.path.join(os.path.abspath(args.game_dir), ".pid")
-            try:
-                os.unlink(pid_file)
-            except OSError:
-                pass
 
 
 if __name__ == "__main__":
