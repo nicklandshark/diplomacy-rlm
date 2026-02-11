@@ -163,7 +163,7 @@ describe("GET /api/games/[gameId]/events", () => {
   // ═══════════════════════════════════════════════════════════════════════
 
   describe("upstream fetch timeout (regression: hanging on dead port)", () => {
-    it("passes AbortSignal.timeout to the upstream fetch", async () => {
+    it("passes an abort signal to upstream fetch for connection timeout control", async () => {
       const gameDir = path.join(tmpDir, "game1");
       fs.mkdirSync(gameDir);
       fs.writeFileSync(path.join(gameDir, ".pid"), "999");
@@ -197,6 +197,24 @@ describe("GET /api/games/[gameId]/events", () => {
 
       expect(res.status).toBe(502);
       expect((await res.json()).error).toMatch(/unavailable/i);
+    });
+
+    it("clears the connection timeout timer when upstream fetch rejects", async () => {
+      const gameDir = path.join(tmpDir, "game1");
+      fs.mkdirSync(gameDir);
+      fs.writeFileSync(path.join(gameDir, ".pid"), "999");
+      fs.writeFileSync(path.join(gameDir, ".api_port"), "3100");
+
+      const clearSpy = vi.spyOn(globalThis, "clearTimeout");
+      vi.spyOn(globalThis, "fetch").mockRejectedValue(
+        new Error("connect ECONNREFUSED"),
+      );
+
+      const GET = await getHandler();
+      const res = await GET(makeRequest(), makeParams("game1"));
+
+      expect(res.status).toBe(502);
+      expect(clearSpy).toHaveBeenCalled();
     });
   });
 

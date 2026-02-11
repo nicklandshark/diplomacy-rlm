@@ -46,15 +46,25 @@ export async function GET(
   const afterId = url.searchParams.get("after_id") || "0";
 
   try {
-    const upstream = await fetch(
-      `${liveApiUrl}/events/stream?after_id=${afterId}`,
-      {
-        headers: { Accept: "text/event-stream" },
-        // Abort if the sidecar doesn't respond within 5 seconds — prevents
-        // hanging indefinitely on a dead port.
-        signal: AbortSignal.timeout(5000),
-      },
-    );
+    // Use a connection-only timeout: abort if the sidecar doesn't start
+    // responding within 5 seconds, but once the SSE stream opens, let it
+    // stay alive indefinitely (the stream self-terminates on game end).
+    const connectController = new AbortController();
+    const connectTimer = setTimeout(() => connectController.abort(), 5000);
+
+    let upstream: Response;
+    try {
+      upstream = await fetch(
+        `${liveApiUrl}/events/stream?after_id=${afterId}`,
+        {
+          headers: { Accept: "text/event-stream" },
+          signal: connectController.signal,
+        },
+      );
+    } finally {
+      // Always clear the timer after fetch resolves/rejects to avoid leaks.
+      clearTimeout(connectTimer);
+    }
 
     if (!upstream.ok || !upstream.body) {
       return NextResponse.json({ error: "Upstream unavailable" }, { status: 502 });
