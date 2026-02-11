@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import DiplomacyMap from "@/components/map/DiplomacyMap";
+import CRTMap from "./CRTMap";
 import MemoryViewer from "@/components/memory/MemoryViewer";
 import { useGameData, useMemory } from "@/hooks/useGameData";
 import { usePhaseNavigation } from "@/hooks/usePhaseNavigation";
@@ -22,7 +23,7 @@ import { SummaryPanel } from "./SummaryPanel";
 import { PhaseTimeline } from "./PhaseTimeline";
 import { PhaseTransition } from "./PhaseTransition";
 import { ActivityFeed } from "./ActivityFeed";
-import { TacticalPanel, Rivet } from "@/app/military-ui-kit/components";
+import { TacticalPanel, Rivet, TacticalTabGroup, NavButton } from "@/app/military-ui-kit/components";
 
 // Pixel art flag icons for each power
 const PixelFlagIcon = ({ power, size = 20 }: { power: string; size?: number }) => {
@@ -104,7 +105,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
   const [selectedPower, setSelectedPower] = useState<string | null>(null);
   const [memoryRefreshKey, setMemoryRefreshKey] = useState(0);
   const [hoveredOrder, setHoveredOrder] = useState<string | null>(null);
-  
+  const [useCRTMap, setUseCRTMap] = useState(false);
+
   // Playback state
   const [playing, setPlaying] = useState(false);
   const [revealedOrderCount, setRevealedOrderCount] = useState(-1);
@@ -296,67 +298,61 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
     return () => window.removeEventListener("keydown", handler);
   }, [handlePlayToggle, playing]);
 
-  const tabButtonClass = (active: boolean) =>
-    `px-3 py-1.5 text-xs font-medium capitalize transition-colors relative ${
-      active
-        ? "text-[#ff9500] border-b-2 border-[#ff9500] bg-[#ff9500]/5"
-        : "text-[#808080] hover:text-[#e0e0e0] border-b-2 border-transparent"
-    }`;
-
   return (
     <div className="flex flex-col gap-2 h-[calc(100vh-80px)] bg-[#0a0a0a]">
       <PhaseTransition phase={nav.currentPhase} show={!!nav.currentPhase} />
 
       {/* Top nav bar - responsive spacing */}
-      <TacticalPanel className="flex items-center gap-1.5 sm:gap-2 lg:gap-3" contentClassName="p-1.5 sm:p-2 flex flex-row items-center gap-1.5 sm:gap-2 lg:gap-3">
-        <span className="text-xs sm:text-sm font-semibold text-[#ff9500] whitespace-nowrap">{gameId}</span>
-        <div className="w-px h-4 sm:h-5 bg-[#3a3a3a] flex-shrink-0" />
+      <TacticalPanel className="w-full" contentClassName="p-1.5 sm:p-2 lg:p-3 xl:p-4 flex flex-row items-center gap-1.5 sm:gap-2 lg:gap-3 xl:gap-4 min-w-0">
+        <span className="text-xs sm:text-sm lg:text-base xl:text-lg font-semibold text-[#ff9500] whitespace-nowrap flex-shrink-0">{gameId}</span>
+        <div className="w-px h-4 sm:h-5 lg:h-6 xl:h-7 bg-[#3a3a3a] flex-shrink-0" />
 
-        {/* Phase controls - responsive sizing */}
-        <div className="flex items-center gap-0.5 sm:gap-1">
-          <button
-            disabled={nav.isFirst}
-            onClick={nav.goPrev}
-            className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
+        {/* Phase controls - military UI kit buttons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <NavButton disabled={nav.isFirst} onClick={nav.goPrev}>
             ◀
-          </button>
-          <button
-            onClick={handlePlayToggle}
-            className={`px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase border transition-all ${
-              playing
-                ? "bg-[#ff9500] border-[#ff9500] text-[#0a0a0a]"
-                : "bg-[#2a2a2a] border-[#3a3a3a] text-[#808080] hover:border-[#4a4a4a]"
-            }`}
-          >
+          </NavButton>
+          <NavButton variant={playing ? "primary" : "secondary"} onClick={handlePlayToggle}>
             {playing ? "⏹" : "▶"}
-          </button>
-          <button
-            disabled={nav.isLast}
-            onClick={nav.goNext}
-            className="px-1.5 sm:px-2 py-0.5 sm:py-1 text-[9px] sm:text-[10px] font-bold uppercase bg-[#2a2a2a] border border-[#3a3a3a] text-[#808080] hover:border-[#ff9500] hover:text-[#ff9500] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-          >
+          </NavButton>
+          <NavButton disabled={nav.isLast} onClick={nav.goNext}>
             ▶
-          </button>
+          </NavButton>
         </div>
 
-        {/* Phase timeline - responsive */}
-        <div className="flex-1 min-w-0 overflow-hidden">
-          <PhaseTimeline
-            phases={phases}
-            currentPhase={nav.currentPhase}
-            onSelectPhase={nav.goTo}
-          />
+        {/* Phase timeline - responsive with scrim */}
+        <div className="relative flex-1 min-w-0 overflow-hidden">
+          <div
+            className="overflow-x-auto overflow-y-hidden scroll-pl-20 sm:scroll-pl-24 lg:scroll-pl-28 xl:scroll-pl-32 scroll-pr-48 sm:scroll-pr-56 lg:scroll-pr-64 xl:scroll-pr-80 [&::-webkit-scrollbar]:hidden"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}
+          >
+            <PhaseTimeline
+              phases={phases}
+              currentPhase={nav.currentPhase}
+              onSelectPhase={nav.goTo}
+            />
+          </div>
+          {/* Gradient scrim on left edge */}
+          <div className="absolute left-0 top-0 bottom-0 w-12 sm:w-14 lg:w-16 xl:w-20 pointer-events-none" style={{
+            background: "linear-gradient(to right, #2a2a2a 0%, #2a2a2a 20%, rgba(42, 42, 42, 0.8) 60%, rgba(42, 42, 42, 0) 100%)"
+          }} />
+          {/* Gradient scrim on right edge */}
+          <div className="absolute right-0 top-0 bottom-0 w-12 sm:w-14 lg:w-16 xl:w-20 pointer-events-none" style={{
+            background: "linear-gradient(to left, #2a2a2a 0%, #2a2a2a 20%, rgba(42, 42, 42, 0.8) 60%, rgba(42, 42, 42, 0) 100%)"
+          }} />
         </div>
 
         {/* Status - responsive text */}
-        <div className="w-px h-4 sm:h-5 bg-[#3a3a3a] flex-shrink-0" />
-        <span className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0 text-[10px] sm:text-xs whitespace-nowrap">
+        <div className="w-px h-4 sm:h-5 lg:h-6 xl:h-7 bg-[#3a3a3a] flex-shrink-0" />
+        <span className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 flex-shrink-0 text-[10px] sm:text-xs lg:text-sm xl:text-base whitespace-nowrap">
           {liveEvents.connected ? (
             <>
-              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2">
+              <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 lg:h-2.5 lg:w-2.5 xl:h-3 xl:w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4a7c59] opacity-75" />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-[#4a7c59]" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 lg:h-2.5 lg:w-2.5 xl:h-3 xl:w-3 bg-[#4a7c59]" />
               </span>
               <span className="text-[#4a7c59] font-medium hidden sm:inline">{liveStep || "Live"}</span>
               <span className="text-[#4a7c59] font-medium inline sm:hidden">●</span>
@@ -369,24 +365,14 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
       {/* Main content */}
       <div className="flex gap-2 flex-1 min-h-0">
-        {/* Left sidebar - responsive width */}
-        <TacticalPanel title="INTELLIGENCE" className="w-64 lg:w-80 xl:w-96 flex-shrink-0 flex flex-col min-h-0" contentClassName="p-2 flex flex-col flex-1 min-h-0">
-          <div className="flex border-b border-[#2a2a2a]">
-            {(["orders", "messages", "summary"] as LeftTab[]).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setLeftTab(tab)}
-                className={tabButtonClass(leftTab === tab)}
-              >
-                {tab}
-                {tab === "messages" && unreadCount > 0 && leftTab !== "messages" && (
-                  <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-[#ff9500] text-[#0a0a0a] rounded-full min-w-[18px] text-center">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        {/* Left sidebar - flexible width to reduce activity feed height */}
+        <TacticalPanel title="INTELLIGENCE" className="min-w-64 lg:min-w-80 flex-1 max-w-[600px] flex flex-col min-h-0" contentClassName="p-2 flex flex-col flex-1 min-h-0">
+          <TacticalTabGroup
+            tabs={["orders", "messages", "summary"]}
+            activeTab={leftTab}
+            onTabChange={(tab) => setLeftTab(tab as LeftTab)}
+            badge={{ messages: unreadCount }}
+          />
           <div className="flex-1 overflow-auto min-h-0">
             {leftTab === "orders" && (
               <OrderPanel
@@ -407,19 +393,53 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
               />
             )}
             {leftTab === "summary" && (
-              <SummaryPanel state={state} />
+              <SummaryPanel
+                gameId={gameId}
+                currentPhase={nav.currentPhase}
+                refreshKey={dataRefreshKey}
+                isLive={liveEvents.connected && nav.isLast}
+              />
             )}
           </div>
         </TacticalPanel>
 
-        {/* Center: Map + Activity (unified) */}
-        <div className="flex-1 min-w-0 flex flex-col gap-1 min-h-0">
-          {/* Map area - equal flex priority with activity */}
-          <div className="flex-1 min-h-0 w-full relative overflow-hidden" style={{ containerType: 'size' }}>
+        {/* Center: Map + Activity (unified) - higher flex priority */}
+        <div className="flex-[2] min-w-0 flex flex-col gap-1 min-h-0">
+          {/* Map area - scales based on aspect ratio, takes 60% of vertical space */}
+          <div className="flex-[3] min-h-0 w-full flex items-center justify-center relative overflow-hidden" style={{ containerType: 'size' }}>
+            {/* Map style toggle button */}
+            <button
+              onClick={() => setUseCRTMap(!useCRTMap)}
+              className="absolute top-2 right-2 z-20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider border-2 transition-all"
+              style={{
+                background: useCRTMap
+                  ? 'linear-gradient(135deg, #2a2a2a 0%, #252525 50%, #2a2a2a 100%)'
+                  : 'linear-gradient(135deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)',
+                borderColor: useCRTMap ? '#ff9500' : '#3a3a3a',
+                color: useCRTMap ? '#ff9500' : '#808080',
+                boxShadow: useCRTMap
+                  ? 'inset 0 2px 4px rgba(0,0,0,0.6), 0 0 12px rgba(255,149,0,0.4)'
+                  : 'inset 0 2px 4px rgba(0,0,0,0.8)',
+              }}
+              title="Toggle CRT display mode"
+            >
+              {useCRTMap ? '◉ CRT' : '○ STD'}
+            </button>
+
             {loading ? (
               <div className="flex items-center justify-center h-full text-[#808080]">
                 Loading phase data...
               </div>
+            ) : useCRTMap ? (
+              <CRTMap
+                svgContent={svgContent}
+                state={state}
+                orders={displayOrders || undefined}
+                results={results}
+                hoveredOrder={hoveredOrder}
+                focusLocation={focusLocation}
+                revealedOrderCount={playing ? revealedOrderCount : -1}
+              />
             ) : (
               <DiplomacyMap
                 svgContent={svgContent}
@@ -433,8 +453,8 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
             )}
           </div>
 
-          {/* Activity feed below map — equal flex priority, fills remaining space */}
-          <TacticalPanel className="flex-1 min-h-[80px] flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
+          {/* Activity feed below map — takes 40% of vertical space, grows to fill gaps */}
+          <TacticalPanel className="flex-[2] min-h-[80px] flex flex-col" contentClassName="p-0 flex flex-col flex-1 min-h-0">
             <ActivityFeed
               events={liveEvents.events}
               connected={liveEvents.connected}
@@ -453,7 +473,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
 
         {/* Right sidebar: Memory with affixed tabs - responsive width */}
-        <div className="w-64 lg:w-80 xl:w-96 flex-shrink-0 flex flex-row min-h-0 gap-0">
+        <div className="w-64 lg:w-80 xl:w-96 max-w-[400px] flex-shrink-0 flex flex-row min-h-0 gap-0">
           {/* Vertical power tabs - separate container */}
           <div className="w-14 flex-shrink-0 flex flex-col border-r-2 border-[#1a1a1a] py-1 overflow-y-auto" style={{
             background: 'linear-gradient(to right, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)'
