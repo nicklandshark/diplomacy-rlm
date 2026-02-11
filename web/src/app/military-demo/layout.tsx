@@ -10,9 +10,7 @@ export default function MilitaryDemoLayout({ children }: { children: React.React
     const shouldUseMSW = (() => {
       if (typeof window === "undefined") return false;
       const qs = new URLSearchParams(window.location.search);
-      if (qs.get("msw") === "1") return true;
-      if (qs.get("msw") === "0") return false;
-      return process.env.NEXT_PUBLIC_USE_MSW === "1";
+      return qs.get("msw") === "1";
     })();
 
     if (!shouldUseMSW) {

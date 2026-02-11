@@ -2,6 +2,11 @@
 
 import { RefObject, useEffect, useRef, useState } from "react";
 import type { PhaseOrders, PhaseResults } from "@/lib/types";
+import {
+  getOrdersPanelLayoutMode,
+  toOrderResultLabel,
+  type OrdersPanelLayoutMode,
+} from "@/lib/orders-layout";
 import { buildOrderRows } from "./intel/fsb-utils";
 
 interface OrderPanelProps {
@@ -16,35 +21,39 @@ interface OrderPanelProps {
 export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revealedOrderCount = -1, activeOrderRef }: OrderPanelProps) {
   const rows = buildOrderRows(orders, results, pendingPowers);
   const shellRef = useRef<HTMLDivElement>(null);
-  const [layoutMode, setLayoutMode] = useState<"full" | "medium" | "compact">("full");
+  const [layoutMode, setLayoutMode] = useState<OrdersPanelLayoutMode>("wide");
 
   useEffect(() => {
     const host = shellRef.current;
     if (!host || typeof ResizeObserver === "undefined") return;
 
     const updateLayout = () => {
-      const width = host.getBoundingClientRect().width;
-      if (width < 520) {
-        setLayoutMode("compact");
-      } else if (width < 720) {
-        setLayoutMode("medium");
-      } else {
-        setLayoutMode("full");
-      }
+      const panelWidth = host.getBoundingClientRect().width;
+      const viewportWidth = typeof window === "undefined" ? panelWidth : window.innerWidth;
+      setLayoutMode(getOrdersPanelLayoutMode(panelWidth, viewportWidth));
     };
 
     updateLayout();
     const observer = new ResizeObserver(updateLayout);
     observer.observe(host);
-    return () => observer.disconnect();
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", updateLayout);
+    }
+
+    return () => {
+      observer.disconnect();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("resize", updateLayout);
+      }
+    };
   }, []);
 
   const columnTemplate =
     layoutMode === "compact"
-      ? "58px 72px minmax(128px,1fr)"
-      : layoutMode === "medium"
-      ? "64px 72px minmax(132px,1fr) 110px"
-      : "70px 74px minmax(160px,1fr) 90px 66px";
+      ? "56px 68px minmax(0,1fr)"
+      : layoutMode === "normal"
+      ? "62px 70px minmax(0,1fr) 112px"
+      : "68px 74px minmax(0,1fr) 96px 64px";
 
   if (rows.length === 0) {
     return (
@@ -64,13 +73,6 @@ export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revea
     unknown: { text: "text-[#b7bec6]", badge: "border-[#8a95a1]/45 bg-[#8a95a1]/12", icon: "?", label: "unknown" },
   };
 
-  const resultText = (rowResult: string, statusLabel: string) => {
-    const rendered = (rowResult || "").trim();
-    if (!rendered || rendered.toLowerCase() === "no report") return "no report";
-    if (rendered.toLowerCase() === "resolved") return statusLabel;
-    return rendered;
-  };
-
   return (
     <div ref={shellRef} className="p-2 text-xs font-['IBM_Plex_Mono']">
       <div
@@ -87,7 +89,7 @@ export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revea
           <div className="px-2 py-1.5" role="columnheader">Unit</div>
           <div className="px-2 py-1.5" role="columnheader">Order</div>
           {layoutMode !== "compact" && <div className="px-2 py-1.5" role="columnheader">Result</div>}
-          {layoutMode === "full" && <div className="px-2 py-1.5" role="columnheader">Status</div>}
+          {layoutMode === "wide" && <div className="px-2 py-1.5" role="columnheader">Status</div>}
         </div>
 
         <div className="divide-y divide-[#2a2a2a]" role="rowgroup">
@@ -117,23 +119,23 @@ export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revea
                 <div className="px-2 py-1.5 font-semibold uppercase tracking-[0.08em] text-[#ff9500]" role="cell">{row.power.slice(0, 3)}</div>
                 <div className="px-2 py-1.5 text-[#b8b8b8]" role="cell">{row.unit}</div>
                 <div className={`px-2 py-1.5 text-[#d0d0d0] min-w-0 ${layoutMode === "compact" ? "flex flex-col items-start gap-1" : "flex items-center justify-between gap-2"}`} role="cell">
-                  <span className={`${layoutMode === "compact" ? "whitespace-normal break-words leading-[1.35]" : layoutMode === "medium" ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}>{row.order}</span>
+                  <span className={`${layoutMode === "compact" ? "whitespace-normal break-words leading-[1.35]" : layoutMode === "normal" ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}>{row.order}</span>
                   {layoutMode === "compact" && (
                     <span
                       className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.05em] font-semibold ${statusStyle.text} ${statusStyle.badge}`}
-                      title={resultText(row.result, statusStyle.label)}
+                      title={toOrderResultLabel(row.result, statusStyle.label)}
                     >
                       <span aria-hidden="true">{statusStyle.icon}</span>
-                      <span>{resultText(row.result, statusStyle.label)}</span>
+                      <span>{toOrderResultLabel(row.result, statusStyle.label)}</span>
                     </span>
                   )}
                 </div>
                 {layoutMode !== "compact" && (
-                  <div className={`px-2 py-1.5 ${statusStyle.text} ${layoutMode === "medium" ? "whitespace-normal break-words leading-[1.25]" : ""}`} role="cell">
-                    {layoutMode === "medium" ? resultText(row.result, statusStyle.label) : row.result}
+                  <div className={`px-2 py-1.5 ${statusStyle.text} ${layoutMode === "normal" ? "whitespace-normal break-words leading-[1.25]" : ""}`} role="cell">
+                    {layoutMode === "normal" ? toOrderResultLabel(row.result, statusStyle.label) : row.result}
                   </div>
                 )}
-                {layoutMode === "full" && (
+                {layoutMode === "wide" && (
                   <div className="px-2 py-1.5 flex justify-center" role="cell">
                     <span
                       className={`inline-flex h-6 w-8 items-center justify-center rounded border text-[13px] font-semibold ${statusStyle.text} ${statusStyle.badge}`}
@@ -145,7 +147,7 @@ export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revea
                     </span>
                   </div>
                 )}
-                {layoutMode === "compact" && <span className="sr-only">{resultText(row.result, statusStyle.label)}</span>}
+                {layoutMode === "compact" && <span className="sr-only">{toOrderResultLabel(row.result, statusStyle.label)}</span>}
               </div>
             );
           })}
