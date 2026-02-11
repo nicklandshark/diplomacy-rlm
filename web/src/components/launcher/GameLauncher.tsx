@@ -233,45 +233,65 @@ export default function GameLauncher() {
   const canLaunch = powers.size >= 2 && !launching;
 
   return (
-    <div className="mb-10">
-      {/* Presets Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+    <div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {PRESETS.map((preset) => (
           <button
             key={preset.key}
             onClick={() => handlePresetClick(preset)}
             disabled={launching}
             className={`
-              relative text-left p-4 rounded-lg border transition-all duration-150
+              group relative min-h-[128px] text-left border px-5 py-4 transition-all duration-150
               ${
                 selectedPreset === preset.key
-                  ? "border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/30"
-                  : "border-gray-700 bg-gray-900 hover:border-gray-500 hover:bg-gray-800/80"
+                  ? "border-[#dda52a] bg-[linear-gradient(160deg,#121923_0%,#0e141d_100%)] shadow-[0_0_0_1px_rgba(221,165,42,0.3)]"
+                  : "border-[#2f394a] bg-[linear-gradient(160deg,#0f141d_0%,#0b1017_100%)] hover:border-[#46526a]"
               }
               ${launching ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
             `}
           >
-            <div className="font-semibold text-sm text-gray-100">
+            <span className="absolute left-2 top-2 h-2 w-2 rounded-full border border-[#3d495d] bg-[#161d28]" />
+            <span className="absolute right-2 top-2 h-2 w-2 rounded-full border border-[#3d495d] bg-[#161d28]" />
+            <span className="absolute left-2 bottom-2 h-2 w-2 rounded-full border border-[#3d495d] bg-[#161d28]" />
+            <span className="absolute right-2 bottom-2 h-2 w-2 rounded-full border border-[#3d495d] bg-[#161d28]" />
+            <div className="text-[31px] leading-none font-medium uppercase tracking-[0.03em] text-[#d7d2be] [font-family:'MD_System_Condensed_Trial',monospace]">
               {preset.label}
             </div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="mt-2 text-[12px] leading-5 text-[#808b9f]">
               {preset.description}
             </div>
-            {selectedPreset === preset.key && preset.key !== "custom" && (
-              <div className="text-[10px] text-blue-400 mt-2 font-medium">
-                Click again to launch instantly
+            <div className="mt-1 text-[12px] leading-5 text-[#667287]">
+              {preset.key === "2player" && "Rapid bilateral setup"}
+              {preset.key === "7player" && "Standard map, full board"}
+              {preset.key === "custom" && "User defined parameters"}
+            </div>
+            <div className="absolute bottom-3 right-4 text-[18px] leading-none text-[#39465f] transition-colors group-hover:text-[#5c6e8e]">
+              {preset.key === "2player" && "A"}
+              {preset.key === "7player" && "O"}
+              {preset.key === "custom" && "H"}
+            </div>
+            {selectedPreset === preset.key && preset.key !== "custom" ? (
+              <div className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#ffbf55]">
+                Press again to execute
               </div>
-            )}
+            ) : null}
           </button>
         ))}
       </div>
 
-      {/* Expanded Form */}
       {showForm && (
-        <div className="border border-gray-800 rounded-lg bg-gray-900/50 p-5 space-y-5">
-          {/* Powers Selection */}
+        <div className="mt-4 border border-[#2d3746] bg-[linear-gradient(145deg,#101722_0%,#0c1118_100%)] p-4 sm:p-5">
+          <div className="mb-4 flex items-center justify-between border-b border-[#263142] pb-2">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#c2c9d6]">
+              Manual Configuration
+            </p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#71809a]">
+              Runtime Parameters
+            </p>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-[#a7b1c0]">
               Powers
             </label>
             <div className="flex flex-wrap gap-2">
@@ -284,21 +304,20 @@ export default function GameLauncher() {
                     onClick={() => togglePower(power)}
                     disabled={launching}
                     className={`
-                      flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
-                      border transition-all duration-100
+                      flex items-center gap-1.5 border px-2.5 py-1.5 text-sm font-medium transition-all duration-100
                       ${launching ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
                     `}
                     style={
                       selected
                         ? {
-                            backgroundColor: color + "20",
-                            borderColor: color + "66",
+                            backgroundColor: color + "12",
+                            borderColor: color + "88",
                             color: color,
                           }
                         : {
                             backgroundColor: "transparent",
-                            borderColor: "#374151",
-                            color: "#6b7280",
+                            borderColor: "#344052",
+                            color: "#748096",
                           }
                     }
                   >
@@ -326,16 +345,15 @@ export default function GameLauncher() {
               })}
             </div>
             {powers.size > 0 && powers.size < 2 && (
-              <p className="text-xs text-amber-400 mt-1.5">
+              <p className="mt-1.5 text-xs text-amber-400">
                 Select at least 2 powers
               </p>
             )}
           </div>
 
-          {/* Backend, Model & Max Year Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#a7b1c0]">
                 Backend
               </label>
               <select
@@ -346,8 +364,8 @@ export default function GameLauncher() {
                   setModel(defaultModelForBackend(b));
                 }}
                 disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+                className="w-full border border-[#344052] bg-[#111925] px-3 py-2 text-sm text-[#d5dbe7]
+                           focus:outline-none focus:ring-1 focus:ring-[#53688c] focus:border-[#53688c]
                            disabled:opacity-50"
               >
                 {BACKENDS.map((b) => (
@@ -359,15 +377,15 @@ export default function GameLauncher() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#a7b1c0]">
                 Model
               </label>
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
                 disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+                className="w-full border border-[#344052] bg-[#111925] px-3 py-2 text-sm text-[#d5dbe7]
+                           focus:outline-none focus:ring-1 focus:ring-[#53688c] focus:border-[#53688c]
                            disabled:opacity-50"
               >
                 {(MODELS_BY_BACKEND[backend] || []).map((m) => (
@@ -379,7 +397,7 @@ export default function GameLauncher() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#a7b1c0]">
                 Max Year
               </label>
               <input
@@ -393,31 +411,29 @@ export default function GameLauncher() {
                 min={1902}
                 max={1920}
                 disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+                className="w-full border border-[#344052] bg-[#111925] px-3 py-2 text-sm text-[#d5dbe7]
+                           focus:outline-none focus:ring-1 focus:ring-[#53688c] focus:border-[#53688c]
                            disabled:opacity-50"
               />
             </div>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            <div className="border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">
               {error}
             </div>
           )}
 
-          {/* Launch Button */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleLaunch}
               disabled={!canLaunch}
               className={`
-                px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150
+                border px-5 py-2 text-sm font-semibold uppercase tracking-[0.12em] transition-all duration-150
                 ${
                   canLaunch
-                    ? "bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-lg shadow-blue-600/20"
-                    : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                    ? "border-[#d89e24] bg-[#2a2010] text-[#f0ca75] hover:bg-[#3b2c16] cursor-pointer"
+                    : "border-[#3a465a] bg-[#1d2432] text-[#69788f] cursor-not-allowed"
                 }
               `}
             >
@@ -443,15 +459,15 @@ export default function GameLauncher() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Launching...
+                  Launching
                 </span>
               ) : (
-                "Launch Game"
+                "Launch Sequence"
               )}
             </button>
 
             {!launching && powers.size >= 2 && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-[#7f8ba0]">
                 {powers.size} power{powers.size !== 1 ? "s" : ""} selected
                 &middot; {model || "no model"} via {BACKENDS.find((b) => b.value === backend)?.label}
                 &middot; until {maxYear}

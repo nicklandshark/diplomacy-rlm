@@ -9,106 +9,97 @@ export default function HomePage() {
   const games = listGames();
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(120%_90%_at_50%_0%,rgba(255,162,0,0.08)_0%,rgba(17,19,24,0.98)_50%,#06080d_100%)] px-4 py-6 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1380px]">
-        <header className="relative overflow-hidden rounded-[16px] border border-[#303640] bg-[linear-gradient(145deg,#1f242d_0%,#151a22_42%,#11161f_100%)] px-5 py-5 shadow-[0_20px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] sm:px-7">
-          <div className="pointer-events-none absolute -top-16 left-1/2 h-40 w-[70%] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(255,166,0,0.22),rgba(255,166,0,0))]" />
-          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-[#8792a3]">
-                Diplomacy RLM
-              </p>
-              <h1 className="mt-1 text-[28px] font-semibold uppercase tracking-[0.06em] text-[#e3e7f0] sm:text-[34px]">
-                Command Console
-              </h1>
-              <p className="mt-2 max-w-[820px] text-[13px] leading-6 text-[#99a4b6]">
-                Launch live games, monitor active runs, and open the military operations view with live API and SSE updates.
-              </p>
-            </div>
-            <div className="inline-flex items-center gap-2 self-start rounded-md border border-[#3b424f] bg-[#141a24] px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-[#c2cad8]">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#43d17e] shadow-[0_0_10px_rgba(67,209,126,0.8)]" />
-              <span>{games.length} run{games.length === 1 ? "" : "s"}</span>
-            </div>
-          </div>
-        </header>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_1fr]">
-          <section className="rounded-[14px] border border-[#2f3540] bg-[linear-gradient(140deg,#161b24_0%,#121720_52%,#0f141d_100%)] p-4 shadow-[0_16px_32px_rgba(0,0,0,0.42)] sm:p-5">
-            <div className="mb-4 flex items-center justify-between border-b border-[#2c323c] pb-3">
-              <h2 className="text-[14px] font-semibold uppercase tracking-[0.12em] text-[#d5dbe8]">
-                Launch New Game
-              </h2>
-              <span className="text-[10px] uppercase tracking-[0.12em] text-[#8d97a7]">
-                Runtime Config
-              </span>
-            </div>
-            <GameLauncher />
-          </section>
-
-          <section className="rounded-[14px] border border-[#2f3540] bg-[linear-gradient(140deg,#12161f_0%,#0e131b_52%,#0b1017_100%)] p-4 shadow-[0_16px_32px_rgba(0,0,0,0.42)] sm:p-5">
-            <div className="mb-4 flex items-center justify-between border-b border-[#2c323c] pb-3">
-              <h2 className="text-[14px] font-semibold uppercase tracking-[0.12em] text-[#d5dbe8]">
-                Previous Games
-              </h2>
-              <Link
-                href="/military-demo"
-                className="text-[10px] uppercase tracking-[0.12em] text-[#ffac33] hover:text-[#ffc266]"
-              >
-                Open Military View
-              </Link>
-            </div>
-            {games.length === 0 ? (
-              <div className="rounded-[12px] border border-[#2f3642] bg-[#111720] px-4 py-8 text-center">
-                <p className="text-sm text-[#a7afbe]">No games found yet.</p>
-                <p className="mt-1 text-xs text-[#758095]">
-                  Launch a game on the left or set `GAMES_DIR` to a valid run directory.
-                </p>
-              </div>
-            ) : (
-              <div className="max-h-[70vh] space-y-3 overflow-auto pr-1">
-                {games.map((game) => (
-                  <Link
-                    key={game.id}
-                    href={`/game/${game.id}`}
-                    className="group block rounded-[12px] border border-[#313846] bg-[#121924] p-3 transition-[border-color,background-color,transform] duration-150 hover:-translate-y-[1px] hover:border-[#4a5668] hover:bg-[#192231]"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-[15px] font-semibold uppercase tracking-[0.05em] text-[#d8deea] group-hover:text-[#f3f6ff]">
-                        {game.id}
-                      </h3>
-                      <span className="rounded-md border border-[#3a424f] bg-[#171e29] px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#97a2b4]">
-                        {game.lastPhase}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-[11px] text-[#8390a4]">
-                      {game.phases.length} phases
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {game.powers.map((power) => (
-                        <span
-                          key={power}
-                          className="text-[10px] px-2 py-0.5 rounded-full border uppercase tracking-[0.06em]"
-                          style={{
-                            backgroundColor: POWER_DISPLAY_COLORS[power] + "22",
-                            color: POWER_DISPLAY_COLORS[power],
-                            borderColor: POWER_DISPLAY_COLORS[power] + "55",
-                          }}
-                        >
-                          {power}
-                        </span>
-                      ))}
-                    </div>
-                    {game.hasLog && (
-                      <div className="mt-2 text-[10px] uppercase tracking-[0.1em] text-[#7f8a9a]">
-                        log captured
-                      </div>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
+    <div className="relative min-h-screen overflow-hidden bg-[#06090f] px-3 py-4 sm:px-6 sm:py-6">
+      <div className="pointer-events-none absolute inset-0 opacity-55 [background-image:linear-gradient(rgba(22,54,118,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(120,30,18,0.22)_1px,transparent_1px)] [background-size:44px_44px,44px_44px]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(85%_70%_at_50%_0%,rgba(255,166,34,0.1)_0%,rgba(8,11,16,0.88)_58%,#05070c_100%)]" />
+      <div className="relative mx-auto w-full max-w-[1360px] border border-[#253145] bg-[linear-gradient(180deg,rgba(8,12,18,0.92),rgba(7,10,14,0.96))] p-4 shadow-[0_24px_46px_rgba(0,0,0,0.45)] sm:p-6">
+        <div className="mb-5 flex items-center justify-between gap-3 border-b border-[#223049] pb-3">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-[#8f9eb5]">
+            Diplomacy RLM Tactical Grid
+          </p>
+          <Link
+            href="/military-demo"
+            className="inline-flex items-center gap-2 border border-[#324560] bg-[#0f1724] px-3 py-1.5 text-[10px] uppercase tracking-[0.12em] text-[#d4deeb] hover:border-[#4a5f7c] hover:text-[#ffffff]"
+          >
+            <span className="h-2 w-2 rounded-full bg-[#3fca76] shadow-[0_0_8px_rgba(63,202,118,0.78)]" />
+            Open Military View
+          </Link>
         </div>
+
+        <section>
+          <div className="mb-3 flex items-center gap-3">
+            <span className="h-px w-8 bg-[#e0a526]" />
+            <h2 className="text-[12px] uppercase tracking-[0.2em] text-[#d0d7e2]">
+              Initiate New Sequence
+            </h2>
+            <span className="h-px flex-1 bg-[#243449]" />
+          </div>
+          <GameLauncher />
+        </section>
+
+        <section className="mt-6">
+          <div className="mb-3 flex items-center gap-3">
+            <span className="h-px w-8 bg-[#e0a526]" />
+            <h2 className="text-[12px] uppercase tracking-[0.2em] text-[#d0d7e2]">
+              Active Simulations
+            </h2>
+            <span className="h-px flex-1 bg-[#243449]" />
+          </div>
+          {games.length === 0 ? (
+            <div className="border border-[#2d3645] bg-[#0a0f17] px-4 py-8 text-center">
+              <p className="text-sm text-[#aeb7c6]">No active simulations detected.</p>
+              <p className="mt-1 text-xs text-[#7d8799]">
+                Start a sequence above or point `GAMES_DIR` to your run directory.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {games.map((game, index) => (
+                <article
+                  key={game.id}
+                  className="group relative border border-[#303848] bg-[linear-gradient(145deg,#0d1119_0%,#0a0f16_100%)] p-4 transition-colors hover:border-[#495369]"
+                >
+                  <span className="absolute right-3 top-3 border border-[#394152] bg-[#1a202a] px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em] text-[#7f8aa0]">
+                    ID: {String(index + 1).padStart(3, "0")}
+                  </span>
+                  <h3 className="pr-16 text-[30px] leading-none font-medium tracking-[0.02em] text-[#e3e8f2] [font-family:'MD_System_Condensed_Trial',monospace]">
+                    {game.id}
+                  </h3>
+                  <p className="mt-3 text-[11px] tracking-[0.09em] text-[#8d98ab]">
+                    {game.phases.length} phases &nbsp;•&nbsp; Last: {game.lastPhase}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {game.powers.map((power) => (
+                      <span
+                        key={power}
+                        className="border px-2 py-0.5 text-[10px] uppercase tracking-[0.11em]"
+                        style={{
+                          backgroundColor: POWER_DISPLAY_COLORS[power] + "12",
+                          color: POWER_DISPLAY_COLORS[power],
+                          borderColor: POWER_DISPLAY_COLORS[power] + "77",
+                        }}
+                      >
+                        {power}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-4 border-t border-dashed border-[#2e394a] pt-3">
+                    <Link
+                      href={`/game/${game.id}`}
+                      className={`text-[11px] uppercase tracking-[0.14em] ${
+                        game.hasLog
+                          ? "text-[#e8a829] hover:text-[#ffc35d]"
+                          : "text-[#6d7685] hover:text-[#8d95a3]"
+                      }`}
+                    >
+                      Access Log &gt;
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );
