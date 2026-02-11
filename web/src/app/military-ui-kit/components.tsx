@@ -27,38 +27,140 @@ export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?
   </div>
 );
 
-// TacticalPanel - Main container with rivets
-export const TacticalPanel = ({ children, title, className = "" }: any) => (
+// TacticalPanel - Main container with subtle corner rivets and optional inset title well
+export const TacticalPanel = ({ children, title, verticalTitle = false, className = "", contentClassName = "" }: any) => (
   <div className={`relative bg-[#2a2a2a] border-4 overflow-hidden ${className}`}
     style={{
       borderColor: "#1a1a1a",
       boxShadow: "inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 3px rgba(255,255,255,0.05), 0 6px 12px rgba(0,0,0,0.4)",
       background: "linear-gradient(135deg, #2a2a2a 0%, #252525 50%, #2a2a2a 100%)"
     }}>
-    <Rivet style={{ left: "12px", top: "12px" }} />
-    <Rivet style={{ right: "12px", top: "12px" }} />
-    <Rivet style={{ left: "12px", bottom: "12px" }} />
-    <Rivet style={{ right: "12px", bottom: "12px" }} />
+    {/* Corner rivets only - smaller and more subtle */}
+    <Rivet size={6} style={{ left: "8px", top: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ right: "8px", top: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ left: "8px", bottom: "8px", opacity: 0.6 }} />
+    <Rivet size={6} style={{ right: "8px", bottom: "8px", opacity: 0.6 }} />
 
-    {[25, 50, 75].map((percent) => (
-      <div key={`top-${percent}`}>
-        <Rivet style={{ left: `${percent}%`, top: "12px", transform: "translateX(-50%)" }} />
-        <Rivet style={{ left: `${percent}%`, bottom: "12px", transform: "translateX(-50%)" }} />
+    {/* Inset title well - horizontal or vertical */}
+    {title && !verticalTitle && (
+      <div className="relative z-10 mx-6 sm:mx-8 mt-6 mb-3" style={{
+        background: "linear-gradient(180deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,149,0,0.1)",
+        border: "2px solid #0a0a0a",
+        borderRadius: "2px"
+      }}>
+        {/* Inner glow accent */}
+        <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+          background: "radial-gradient(ellipse at top, rgba(255,149,0,0.1) 0%, transparent 50%)"
+        }} />
+
+        {/* Title text */}
+        <div className="relative px-3 sm:px-4 py-1.5 sm:py-2 text-[#ff9500] text-xs sm:text-sm uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
+          textShadow: "0 0 8px rgba(255,149,0,0.4), 0 1px 2px rgba(0,0,0,0.8)"
+        }}>
+          {title}
+        </div>
+
+        {/* Bottom accent line */}
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#ff9500] to-transparent opacity-20" />
       </div>
-    ))}
-
-    {title && (
-      <div className="relative z-10 bg-gradient-to-r from-transparent via-[#ff9500] to-transparent h-[2px] mb-4 opacity-50" />
     )}
 
-    <div className="relative z-10 p-6">
-      {title && (
-        <div className="text-[#ff9500] text-sm uppercase tracking-[0.2em] font-bold mb-4">{title}</div>
-      )}
+    {/* Vertical title well - rotated 90 degrees */}
+    {title && verticalTitle && (
+      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10" style={{
+        writingMode: "vertical-rl",
+        textOrientation: "mixed",
+        transform: "translateY(-50%)"
+      }}>
+        <div className="relative py-3 sm:py-4 px-1.5 sm:px-2" style={{
+          background: "linear-gradient(90deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+          boxShadow: "inset 2px 0 6px rgba(0,0,0,0.8), inset -1px 0 2px rgba(255,255,255,0.03), 1px 0 0 rgba(255,149,0,0.1)",
+          border: "2px solid #0a0a0a",
+          borderRadius: "2px"
+        }}>
+          {/* Inner glow accent */}
+          <div className="absolute inset-0 opacity-30 pointer-events-none" style={{
+            background: "radial-gradient(ellipse at left, rgba(255,149,0,0.1) 0%, transparent 50%)"
+          }} />
+
+          {/* Title text */}
+          <div className="relative text-[#ff9500] text-xs sm:text-sm uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
+            textShadow: "0 0 8px rgba(255,149,0,0.4), 0 1px 2px rgba(0,0,0,0.8)"
+          }}>
+            {title}
+          </div>
+
+          {/* Side accent line */}
+          <div className="absolute left-0 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-[#ff9500] to-transparent opacity-20" />
+        </div>
+      </div>
+    )}
+
+    {/* Content area */}
+    <div className={`relative z-10 ${contentClassName || "p-6"}`}>
       {children}
     </div>
   </div>
 );
+
+// NavButton - Compact navigation button for controls
+export const NavButton = ({ children, variant = "secondary", disabled = false, onClick, className = "" }: {
+  children: React.ReactNode;
+  variant?: "primary" | "secondary";
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) => {
+  const isPrimary = variant === "primary";
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative h-8 w-8 rounded-[4px] border text-[11px] font-bold transition-all flex items-center justify-center ${className}`}
+      style={{
+        background: disabled
+          ? "linear-gradient(180deg, #25211d 0%, #1f1b18 100%)"
+          : isPrimary
+            ? "linear-gradient(180deg, #debb4e 0%, #bf8b15 48%, #7d5a12 100%)"
+            : "linear-gradient(180deg, #55514a 0%, #403c36 35%, #322f2a 70%, #27241f 100%)",
+        borderColor: disabled
+          ? "#35302b"
+          : isPrimary
+            ? "#6f4e11"
+            : "#2a2622",
+        color: disabled
+          ? "#5a534b"
+          : isPrimary
+            ? "#25180a"
+            : "#908880",
+        boxShadow: disabled
+          ? "inset 0 2px 4px rgba(0,0,0,0.5)"
+          : isPrimary
+            ? "inset 0 1px 0 rgba(255,232,158,0.32), inset 0 -1px 0 rgba(80,56,10,0.35), 0 2px 0 #4d370d, 0 4px 9px rgba(0,0,0,0.5)"
+            : "inset 0 1px 0 rgba(255,255,255,0.09), inset 0 -1px 0 rgba(0,0,0,0.35), 0 2px 0 #171512, 0 4px 8px rgba(0,0,0,0.45)",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        textShadow: isPrimary && !disabled ? "0 1px 0 rgba(255,226,145,0.45)" : "0 1px 0 rgba(0,0,0,0.45)"
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled && !isPrimary) {
+          e.currentTarget.style.borderColor = "#544d45";
+          e.currentTarget.style.color = "#d4c7b6";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled && !isPrimary) {
+          e.currentTarget.style.borderColor = "#2a2622";
+          e.currentTarget.style.color = "#908880";
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+};
 
 // CommandButton - Military styled button
 export const CommandButton = ({ children, variant = "primary", disabled = false, onClick, className = "" }: any) => {
@@ -128,71 +230,6 @@ export const CommandButton = ({ children, variant = "primary", disabled = false,
     </button>
   );
 };
-
-// NavButton - compact control button used by the military demo top bar
-export const NavButton = ({ children, variant = "secondary", disabled = false, onClick, className = "" }: any) => {
-  const isPrimary = variant === "primary";
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`relative h-7 min-w-7 rounded-sm border px-2 text-[11px] font-bold uppercase tracking-[0.08em] transition-all ${className}`}
-      style={{
-        borderColor: isPrimary ? "#ff9500" : "#4a4a4a",
-        color: disabled ? "#666666" : isPrimary ? "#0f0f0f" : "#d2b57e",
-        background: disabled
-          ? "linear-gradient(180deg, #1a1a1a 0%, #141414 100%)"
-          : isPrimary
-            ? "linear-gradient(180deg, #ffbf58 0%, #ff9500 100%)"
-            : "linear-gradient(180deg, #2c2c2c 0%, #1f1f1f 100%)",
-        boxShadow: disabled
-          ? "inset 0 1px 2px rgba(0,0,0,0.7)"
-          : isPrimary
-            ? "inset 0 1px 0 rgba(255,230,170,0.45), 0 0 10px rgba(255,149,0,0.35)"
-            : "inset 0 1px 0 rgba(255,255,255,0.08), 0 0 0 1px rgba(0,0,0,0.35)",
-        cursor: disabled ? "not-allowed" : "pointer",
-      }}
-    >
-      {children}
-    </button>
-  );
-};
-
-// TacticalTabGroup - segmented tab row for left-pane switching
-export const TacticalTabGroup = ({ tabs = [], activeTab, onTabChange, badge = {} }: any) => (
-  <div className="mb-2 grid grid-cols-3 gap-1 rounded-sm border border-[#3a3a3a] bg-[#111111] p-1">
-    {tabs.map((tab: string) => {
-      const active = tab === activeTab;
-      const badgeValue = badge?.[tab];
-      return (
-        <button
-          key={tab}
-          type="button"
-          onClick={() => onTabChange?.(tab)}
-          className="flex items-center justify-center gap-1 rounded-sm border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] transition-all"
-          style={{
-            borderColor: active ? "#ff9500" : "#2b2b2b",
-            color: active ? "#ffb347" : "#8d8d8d",
-            background: active
-              ? "linear-gradient(180deg, #2e2412 0%, #1a150d 100%)"
-              : "linear-gradient(180deg, #1c1c1c 0%, #121212 100%)",
-            boxShadow: active
-              ? "inset 0 1px 0 rgba(255,210,140,0.2), 0 0 8px rgba(255,149,0,0.2)"
-              : "inset 0 1px 0 rgba(255,255,255,0.04)",
-          }}
-        >
-          <span>{tab}</span>
-          {typeof badgeValue === "number" && badgeValue > 0 && (
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-[#6d3f00] bg-[#ff9500] px-1 text-[9px] font-black text-[#17120a]">
-              {badgeValue > 9 ? "9+" : badgeValue}
-            </span>
-          )}
-        </button>
-      );
-    })}
-  </div>
-);
 
 // OrderItem - From military-ui-kit
 export const OrderItem = ({ territory, unitType, order, status }: any) => {
@@ -305,3 +342,92 @@ export const ActionLog = ({ actions }: any) => (
     </div>
   </div>
 );
+
+// ProgressBar - Military styled progress bar
+export const ProgressBar = ({ value, label, color = "#ff9500", showPercentage = true }: {
+  value: number;
+  label?: string;
+  color?: string;
+  showPercentage?: boolean;
+}) => (
+  <div>
+    {label && <div className="text-xs text-[#808080] uppercase mb-2 tracking-wider font-bold">{label}</div>}
+    <div className="relative h-8 bg-[#1a1a1a] border-3 overflow-hidden"
+      style={{
+        borderColor: "#3a3a3a",
+        borderWidth: "3px",
+        borderStyle: "solid",
+        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.3)",
+        background: "linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%)"
+      }}>
+      {/* Corner rivets */}
+      <Rivet size={5} style={{ left: "6px", top: "6px" }} />
+      <Rivet size={5} style={{ right: "6px", top: "6px" }} />
+
+      {/* Progress fill */}
+      <div
+        className="absolute inset-y-0 left-0 transition-all duration-300 z-[1]"
+        style={{
+          width: `${value}%`,
+          background: `linear-gradient(90deg, ${color} 0%, ${color}dd 50%, ${color} 100%)`,
+          boxShadow: `inset 0 1px 2px rgba(255,255,255,0.2), inset 0 -1px 2px rgba(0,0,0,0.5), 0 0 15px ${color}60`
+        }}
+      />
+
+      {/* Percentage text */}
+      {showPercentage && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <span className="text-xs font-bold text-[#e0e0e0] tracking-wider" style={{
+            textShadow: "0 0 4px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,1)"
+          }}>{value}%</span>
+        </div>
+      )}
+
+      {/* Scan line effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 pointer-events-none z-[2]"
+        style={{ animation: "scan 2s linear infinite" }} />
+    </div>
+  </div>
+);
+
+// TacticalTabGroup - Military styled tabs
+export const TacticalTabGroup = ({ tabs, activeTab, onTabChange, badge }: {
+  tabs: string[];
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+  badge?: Record<string, number>;
+}) => (
+  <div className="flex gap-1 border-b border-[#2a2a2a] mb-3">
+    {tabs.map((tab) => (
+      <button
+        key={tab}
+        onClick={() => onTabChange(tab)}
+        className={`relative flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-all border-2 border-b-0 whitespace-nowrap ${
+          activeTab === tab
+            ? "border-[#ff9500] bg-[#ff9500]/10 text-[#ff9500] z-10"
+            : "border-transparent text-[#808080] hover:text-[#e0e0e0] hover:border-[#3a3a3a]"
+        }`}
+        style={{
+          marginBottom: '-2px',
+          boxShadow: activeTab === tab
+            ? "inset 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(255,149,0,0.2)"
+            : "inset 0 2px 4px rgba(0,0,0,0.6)"
+        }}
+      >
+        {tab}
+        {badge && badge[tab] > 0 && activeTab !== tab && (
+          <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-[#ff9500] text-[#0a0a0a] rounded-full min-w-[18px] text-center">
+            {badge[tab]}
+          </span>
+        )}
+      </button>
+    ))}
+  </div>
+);
+
+export { GlassPane } from "./shaders/GlassPane";
+export type { GlassPaneProps } from "./shaders/GlassPane";
+export { MaterialSurface } from "./shaders/MaterialSurface";
+export type { MaterialSurfaceProps } from "./shaders/MaterialSurface";
+export { getMaterialPreset, getStrictWebGLContext } from "./shaders/types";
+export type { MaterialPreset, MaterialPresetKey, Vec3 } from "./shaders/types";

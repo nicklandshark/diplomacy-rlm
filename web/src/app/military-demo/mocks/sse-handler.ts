@@ -1,29 +1,28 @@
-import { http, HttpResponse } from 'msw';
+import { http, HttpResponse, passthrough } from 'msw';
 import type { LiveEvent } from '@/lib/types';
 
 let eventId = 0;
 
 const POWERS = ['AUSTRIA', 'ENGLAND', 'FRANCE', 'GERMANY', 'ITALY', 'RUSSIA', 'TURKEY'];
 const ACTIVITY_EVENTS = [
-  { type: 'power.status.thinking', powers: ['FRANCE', 'GERMANY'] },
-  { type: 'power.status.talking', powers: ['FRANCE', 'GERMANY'] },
+  { type: 'step.start', powers: ['FRANCE', 'GERMANY'], step: 'STRATEGIZE' },
+  { type: 'conversation.agent.start', powers: ['FRANCE', 'GERMANY'] },
   { type: 'conversation.started', powers: ['FRANCE', 'GERMANY'] },
   { type: 'message.sent', powers: ['FRANCE', 'GERMANY'] },
-  { type: 'power.status.thinking', powers: ['RUSSIA', 'TURKEY'] },
-  { type: 'power.status.talking', powers: ['RUSSIA', 'TURKEY'] },
+  { type: 'step.start', powers: ['RUSSIA', 'TURKEY'], step: 'STRATEGIZE' },
+  { type: 'conversation.agent.start', powers: ['RUSSIA', 'TURKEY'] },
   { type: 'conversation.started', powers: ['RUSSIA', 'TURKEY'] },
   { type: 'message.sent', powers: ['RUSSIA', 'TURKEY'] },
-  { type: 'power.status.submitted', powers: ['FRANCE'] },
-  { type: 'power.orders.submitted', powers: ['FRANCE'] },
-  { type: 'power.status.submitted', powers: ['GERMANY'] },
-  { type: 'power.orders.submitted', powers: ['GERMANY'] },
-  { type: 'power.status.submitted', powers: ['AUSTRIA'] },
-  { type: 'power.orders.submitted', powers: ['AUSTRIA'] },
+  { type: 'orders.submitted', powers: ['FRANCE'] },
+  { type: 'orders.submitted', powers: ['GERMANY'] },
+  { type: 'orders.submitted', powers: ['AUSTRIA'] },
 ];
 
 export function createSSEHandler() {
-  return http.get('/api/games/:gameId/events', async () => {
+  return http.get('*/api/games/:gameId/events', async ({ params }) => {
+    if (params.gameId !== "demo") return passthrough();
     const encoder = new TextEncoder();
+    const sendEvent = (event: LiveEvent) => `event: game_event\ndata: ${JSON.stringify(event)}\n\n`;
 
     const stream = new ReadableStream({
       async start(controller) {
@@ -39,7 +38,7 @@ export function createSSEHandler() {
           payload: {},
         };
 
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(connectionEvent)}\n\n`));
+        controller.enqueue(encoder.encode(sendEvent(connectionEvent)));
 
         // Send simulated activity events in sequence
         let activityIndex = 0;
@@ -53,14 +52,18 @@ export function createSSEHandler() {
                 priority: 1,
                 ts_wall: Date.now() * 1000,
                 phase: "F1905M",
-                step: "STRATEGIZE",
+                step: (activity as any).step || "STRATEGIZE",
                 power,
-                payload: activity.type.includes('message') ? {
-                  sender: power,
-                  recipient: activity.powers.find(p => p !== power) || 'AUSTRIA',
-                } : {},
+                payload: activity.type === 'step.start'
+                  ? { step: (activity as any).step }
+                  : activity.type === 'message.sent'
+                  ? {
+                      sender: power,
+                      recipient: activity.powers.find(p => p !== power) || 'AUSTRIA',
+                    }
+                  : {},
               };
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+              controller.enqueue(encoder.encode(sendEvent(event)));
             }
             activityIndex++;
           }
@@ -68,7 +71,7 @@ export function createSSEHandler() {
 
         // Keep connection open with heartbeats
         const heartbeatInterval = setInterval(() => {
-          const heartbeat = `data: ${JSON.stringify({
+          const heartbeat = sendEvent({
             event_id: eventId++,
             event_type: "heartbeat",
             priority: 0,
@@ -77,7 +80,7 @@ export function createSSEHandler() {
             step: "STRATEGIZE",
             power: null,
             payload: {},
-          })}\n\n`;
+          });
           controller.enqueue(encoder.encode(heartbeat));
         }, 30000);
 

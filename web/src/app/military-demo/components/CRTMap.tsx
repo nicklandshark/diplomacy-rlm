@@ -16,10 +16,10 @@ interface Props {
 
 export default function CRTMap({ svgContent, state, orders, results, hoveredOrder, focusLocation, revealedOrderCount }: Props) {
   return (
-    <div className="relative w-full h-full flex items-center justify-center" style={{ background: "#000", perspective: "1000px" }}>
+    <div className="relative w-full h-full" style={{ background: "#000", perspective: "1000px" }}>
       {/* CRT curvature container - 3D transform for barrel distortion */}
       <div
-        className="relative w-full h-full flex items-center justify-center"
+        className="relative w-full h-full"
         style={{
           transformStyle: "preserve-3d",
           transform: "rotateY(0deg) rotateX(0deg) scale(1.02)",
@@ -28,7 +28,7 @@ export default function CRTMap({ svgContent, state, orders, results, hoveredOrde
         }}
       >
         {/* Map layer - extreme saturation for colorblind-friendly orange monochrome */}
-        <div className="relative z-[1]" style={{ filter: "saturate(3.5) contrast(1.4) brightness(1.15)" }}>
+        <div className="absolute inset-0 z-[1] flex items-start justify-center" style={{ filter: "saturate(3.5) contrast(1.4) brightness(1.15)" }}>
           <DiplomacyMap
             svgContent={svgContent}
             state={state}
@@ -38,6 +38,7 @@ export default function CRTMap({ svgContent, state, orders, results, hoveredOrde
             focusLocation={focusLocation}
             revealedOrderCount={revealedOrderCount}
             showTerrain={false}
+            fitMode="cover"
           />
         </div>
 
