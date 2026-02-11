@@ -104,6 +104,64 @@ export const TacticalPanel = ({ children, title, verticalTitle = false, classNam
   </div>
 );
 
+// NavButton - Compact navigation button for controls
+export const NavButton = ({ children, variant = "secondary", disabled = false, onClick, className = "" }: {
+  children: React.ReactNode;
+  variant?: "primary" | "secondary";
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+}) => {
+  const isPrimary = variant === "primary";
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`relative h-8 w-8 rounded-[4px] border text-[11px] font-bold transition-all flex items-center justify-center ${className}`}
+      style={{
+        background: disabled
+          ? "linear-gradient(180deg, #25211d 0%, #1f1b18 100%)"
+          : isPrimary
+            ? "linear-gradient(180deg, #debb4e 0%, #bf8b15 48%, #7d5a12 100%)"
+            : "linear-gradient(180deg, #55514a 0%, #403c36 35%, #322f2a 70%, #27241f 100%)",
+        borderColor: disabled
+          ? "#35302b"
+          : isPrimary
+            ? "#6f4e11"
+            : "#2a2622",
+        color: disabled
+          ? "#5a534b"
+          : isPrimary
+            ? "#25180a"
+            : "#908880",
+        boxShadow: disabled
+          ? "inset 0 2px 4px rgba(0,0,0,0.5)"
+          : isPrimary
+            ? "inset 0 1px 0 rgba(255,232,158,0.32), inset 0 -1px 0 rgba(80,56,10,0.35), 0 2px 0 #4d370d, 0 4px 9px rgba(0,0,0,0.5)"
+            : "inset 0 1px 0 rgba(255,255,255,0.09), inset 0 -1px 0 rgba(0,0,0,0.35), 0 2px 0 #171512, 0 4px 8px rgba(0,0,0,0.45)",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.55 : 1,
+        textShadow: isPrimary && !disabled ? "0 1px 0 rgba(255,226,145,0.45)" : "0 1px 0 rgba(0,0,0,0.45)"
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled && !isPrimary) {
+          e.currentTarget.style.borderColor = "#544d45";
+          e.currentTarget.style.color = "#d4c7b6";
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled && !isPrimary) {
+          e.currentTarget.style.borderColor = "#2a2622";
+          e.currentTarget.style.color = "#908880";
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+};
+
 // CommandButton - Military styled button
 export const CommandButton = ({ children, variant = "primary", disabled = false, onClick, className = "" }: any) => {
   const variants = {
@@ -284,3 +342,92 @@ export const ActionLog = ({ actions }: any) => (
     </div>
   </div>
 );
+
+// ProgressBar - Military styled progress bar
+export const ProgressBar = ({ value, label, color = "#ff9500", showPercentage = true }: {
+  value: number;
+  label?: string;
+  color?: string;
+  showPercentage?: boolean;
+}) => (
+  <div>
+    {label && <div className="text-xs text-[#808080] uppercase mb-2 tracking-wider font-bold">{label}</div>}
+    <div className="relative h-8 bg-[#1a1a1a] border-3 overflow-hidden"
+      style={{
+        borderColor: "#3a3a3a",
+        borderWidth: "3px",
+        borderStyle: "solid",
+        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.3)",
+        background: "linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 50%, #0f0f0f 100%)"
+      }}>
+      {/* Corner rivets */}
+      <Rivet size={5} style={{ left: "6px", top: "6px" }} />
+      <Rivet size={5} style={{ right: "6px", top: "6px" }} />
+
+      {/* Progress fill */}
+      <div
+        className="absolute inset-y-0 left-0 transition-all duration-300 z-[1]"
+        style={{
+          width: `${value}%`,
+          background: `linear-gradient(90deg, ${color} 0%, ${color}dd 50%, ${color} 100%)`,
+          boxShadow: `inset 0 1px 2px rgba(255,255,255,0.2), inset 0 -1px 2px rgba(0,0,0,0.5), 0 0 15px ${color}60`
+        }}
+      />
+
+      {/* Percentage text */}
+      {showPercentage && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <span className="text-xs font-bold text-[#e0e0e0] tracking-wider" style={{
+            textShadow: "0 0 4px rgba(0,0,0,0.8), 0 1px 2px rgba(0,0,0,1)"
+          }}>{value}%</span>
+        </div>
+      )}
+
+      {/* Scan line effect */}
+      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-10 pointer-events-none z-[2]"
+        style={{ animation: "scan 2s linear infinite" }} />
+    </div>
+  </div>
+);
+
+// TacticalTabGroup - Military styled tabs
+export const TacticalTabGroup = ({ tabs, activeTab, onTabChange, badge }: {
+  tabs: string[];
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+  badge?: Record<string, number>;
+}) => (
+  <div className="flex gap-1 border-b border-[#2a2a2a] mb-3">
+    {tabs.map((tab) => (
+      <button
+        key={tab}
+        onClick={() => onTabChange(tab)}
+        className={`relative flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-all border-2 border-b-0 whitespace-nowrap ${
+          activeTab === tab
+            ? "border-[#ff9500] bg-[#ff9500]/10 text-[#ff9500] z-10"
+            : "border-transparent text-[#808080] hover:text-[#e0e0e0] hover:border-[#3a3a3a]"
+        }`}
+        style={{
+          marginBottom: '-2px',
+          boxShadow: activeTab === tab
+            ? "inset 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(255,149,0,0.2)"
+            : "inset 0 2px 4px rgba(0,0,0,0.6)"
+        }}
+      >
+        {tab}
+        {badge && badge[tab] > 0 && activeTab !== tab && (
+          <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-[#ff9500] text-[#0a0a0a] rounded-full min-w-[18px] text-center">
+            {badge[tab]}
+          </span>
+        )}
+      </button>
+    ))}
+  </div>
+);
+
+export { GlassPane } from "./shaders/GlassPane";
+export type { GlassPaneProps } from "./shaders/GlassPane";
+export { MaterialSurface } from "./shaders/MaterialSurface";
+export type { MaterialSurfaceProps } from "./shaders/MaterialSurface";
+export { getMaterialPreset, getStrictWebGLContext } from "./shaders/types";
+export type { MaterialPreset, MaterialPresetKey, Vec3 } from "./shaders/types";
