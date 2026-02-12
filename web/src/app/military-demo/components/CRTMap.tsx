@@ -17,7 +17,7 @@ interface Props {
 export default function CRTMap({ svgContent, state, orders, results, hoveredOrder, focusLocation, revealedOrderCount }: Props) {
   return (
     <div className="relative w-full h-full" style={{ background: "#000", perspective: "1000px" }}>
-      {/* CRT curvature container - 3D transform for barrel distortion */}
+      {/* CRT curvature container */}
       <div
         className="relative w-full h-full"
         style={{
@@ -27,8 +27,8 @@ export default function CRTMap({ svgContent, state, orders, results, hoveredOrde
           overflow: "hidden",
         }}
       >
-        {/* Map layer - extreme saturation for colorblind-friendly orange monochrome */}
-        <div className="absolute inset-0 z-[1] flex items-start justify-center" style={{ filter: "saturate(3.5) contrast(1.4) brightness(1.15)" }}>
+        {/* Map layer */}
+        <div className="absolute inset-0 z-[1]" style={{ filter: "saturate(2.21) contrast(1.09) brightness(1.01)" }}>
           <DiplomacyMap
             svgContent={svgContent}
             state={state}
@@ -42,98 +42,102 @@ export default function CRTMap({ svgContent, state, orders, results, hoveredOrde
           />
         </div>
 
-        {/* CRT overlay effects - positioned absolutely to cover map */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Chromatic Aberration - RGB split effect */}
+        {/* CRT overlay effects */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden z-[2]">
+          {/* Chromatic Aberration — edge-weighted, stronger at periphery like real CRT convergence errors */}
           <div
             className="absolute inset-0 z-[4]"
             style={{
-              backgroundColor: "#ff0000",
+              background: "radial-gradient(ellipse at center, transparent 30%, rgba(255,0,0,0.12) 70%, rgba(255,0,0,0.2) 100%)",
               mixBlendMode: "screen",
-              opacity: 0.08,
-              transform: "translateX(-2px)",
-              filter: "blur(0.5px)",
+              transform: "translateX(-2.5px) translateY(-0.5px)",
+              filter: "blur(0.8px)",
             }}
           />
           <div
             className="absolute inset-0 z-[4]"
             style={{
-              backgroundColor: "#0000ff",
+              background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,255,0.1) 70%, rgba(0,0,255,0.18) 100%)",
               mixBlendMode: "screen",
-              opacity: 0.08,
-              transform: "translateX(2px)",
-              filter: "blur(0.5px)",
+              transform: "translateX(2.5px) translateY(0.5px)",
+              filter: "blur(0.8px)",
+            }}
+          />
+          {/* Green channel stays centered — the "anchor" in real RGB convergence */}
+          <div
+            className="absolute inset-0 z-[4]"
+            style={{
+              background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,255,0,0.04) 75%, rgba(0,255,0,0.08) 100%)",
+              mixBlendMode: "screen",
+              filter: "blur(0.4px)",
             }}
           />
 
-          {/* Orange monochrome filter - reduced opacity for readability */}
+          {/* Amber tint — radial from center */}
           <div
             className="absolute inset-0 z-[5]"
             style={{
-              backgroundColor: "#ff9500",
+              background: "radial-gradient(ellipse 85% 79.9% at center, rgba(255,149,0,0.38) 0%, rgba(255,149,0,0.37) 35%, rgba(255,149,0,0.16) 60%, transparent 85%)",
               mixBlendMode: "color",
-              opacity: 0.6,
             }}
           />
 
-          {/* Phosphor glow layers - subtle bloom */}
+          {/* Phosphor glow — additive bloom */}
           <div
             className="absolute inset-0 z-[6]"
             style={{
-              background: "radial-gradient(ellipse at center, rgba(255,149,0,0.25) 0%, transparent 60%)",
+              background: "radial-gradient(ellipse at center, rgba(255,149,0,0.14) 0%, rgba(255,140,40,0.056) 35%, transparent 37%)",
               mixBlendMode: "screen",
-              filter: "blur(30px)",
+              filter: "blur(25px)",
             }}
           />
           <div
             className="absolute inset-0 z-[6]"
             style={{
-              background: "radial-gradient(ellipse at center, rgba(255,149,0,0.15) 0%, transparent 50%)",
+              background: "radial-gradient(ellipse at center, rgba(255,160,60,0.084) 0%, transparent 27.75%)",
               mixBlendMode: "screen",
-              filter: "blur(15px)",
+              filter: "blur(12px)",
             }}
           />
 
-          {/* Scanlines - infinite scroll, lighter */}
+          {/* Scanlines */}
           <div
-            className="crt-scanlines absolute inset-0 opacity-25 z-[7]"
+            className="crt-scanlines absolute inset-0 z-[7]"
             style={{
+              opacity: 0.31,
               backgroundImage: "repeating-linear-gradient(0deg, rgba(0,0,0,0.6) 0px, transparent 1px, transparent 2px, rgba(0,0,0,0.6) 3px)",
               backgroundSize: "100% 4px",
             }}
           />
 
-          {/* Vignette - lighter */}
+          {/* Vignette */}
           <div
             className="absolute inset-0 z-[8]"
             style={{
-              background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)",
+              background: "radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.16) 42%, rgba(0,0,0,0.4) 58%, rgba(0,0,0,0.66) 76%, rgba(0,0,0,0.92) 100%)",
             }}
           />
 
-          {/* Screen curvature shadow - subtle */}
+          {/* Curvature shadow */}
           <div
-            className="absolute inset-0 opacity-30 z-[9]"
+            className="absolute inset-0 z-[9]"
             style={{
-              boxShadow: "inset 0 0 80px 20px rgba(0,0,0,0.8)",
+              opacity: 0.27,
+              boxShadow: "inset 0 0 70px 17.5px rgba(0,0,0,0.8)",
               borderRadius: "8px",
             }}
           />
         </div>
 
-        {/* WebGL barrel distortion shader for CRT curvature - increased for stronger effect */}
-        <CRTDistortion distortion={0.22} />
+        {/* WebGL barrel distortion — visible CRT curvature */}
+        <CRTDistortion distortion={0.2} />
       </div>
 
-      {/* Global CSS Animation for infinite scanline scroll */}
+      {/* Scanline animation */}
       <style jsx global>{`
         @keyframes crt-scanline {
-          from {
-            background-position: 0 0;
-          }
-          to {
-            background-position: 0 4px;
-          }
+          from { background-position: 0 0; }
+          to { background-position: 0 4px; }
         }
         .crt-scanlines {
           animation: crt-scanline 8s linear infinite;

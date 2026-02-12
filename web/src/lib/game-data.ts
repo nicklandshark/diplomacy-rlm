@@ -46,6 +46,40 @@ export function listGames(): GameSummary[] {
 
     const hasLog = fs.existsSync(path.join(gameDir, "game_log.jsonl"));
 
+    // Read .game_meta.json for model/backend
+    let meta: { backend: string | null; model: string | null } | null = null;
+    const metaPath = path.join(gameDir, ".game_meta.json");
+    if (fs.existsSync(metaPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
+        meta = { backend: raw.backend ?? null, model: raw.model ?? null };
+      } catch {}
+    }
+
+    // Read final game state for territory coloring + standings
+    let gameOver = false;
+    let finalStandings: { power: string; scs: number }[] = [];
+    let finalCenters: Record<string, string[]> = {};
+    let finalInfluence: Record<string, string[]> = {};
+
+    const finalStatePath = path.join(snapshotsDir, lastPhase, "game_state.json");
+    if (fs.existsSync(finalStatePath)) {
+      try {
+        const finalState: GameState = JSON.parse(fs.readFileSync(finalStatePath, "utf-8"));
+        finalCenters = finalState.centers || {};
+        finalInfluence = finalState.influence || {};
+
+        // Build standings from centers
+        finalStandings = Object.entries(finalCenters)
+          .map(([power, locs]) => ({ power, scs: locs.length }))
+          .filter(s => s.scs > 0)
+          .sort((a, b) => b.scs - a.scs);
+
+        // Game is over if someone has 18+ SCs or the phase is COMPLETED
+        gameOver = finalStandings.some(s => s.scs >= 18) || lastPhase === "COMPLETED";
+      } catch {}
+    }
+
     games.push({
       id: entry.name,
       path: gameDir,
@@ -53,6 +87,11 @@ export function listGames(): GameSummary[] {
       lastPhase,
       powers,
       hasLog,
+      meta,
+      gameOver,
+      finalStandings,
+      finalCenters,
+      finalInfluence,
     });
   }
 

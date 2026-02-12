@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Diplomacy Terrain Shader Prototype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0a; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  canvas { display: block; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; }
+
+  /* Control panel */
+  #panel {
+    position: fixed; top: 12px; right: 12px; z-index: 10;
+    background: rgba(10, 12, 18, 0.92); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 10px;
+    padding: 14px 16px; width: 280px; max-height: calc(100vh - 24px);
+    overflow-y: auto; color: #c0c8d8;
+    scrollbar-width: thin; scrollbar-color: #333 transparent;
+  }
+  #panel::-webkit-scrollbar { width: 4px; }
+  #panel::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  #panel h2 { font-size: 13px; font-weight: 600; color: #e0e4ec; margin: 0 0 10px; letter-spacing: 0.5px; }
+  .section { margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 10px; }
+  .section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .section-title { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #6a7080; margin-bottom: 8px; font-weight: 600; }
+  .param { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .param label { font-size: 11px; color: #8890a0; flex: 1; min-width: 0; white-space: nowrap; }
+  .param input[type=range] {
+    flex: 1.2; height: 3px; -webkit-appearance: none; appearance: none;
+    background: #2a2e38; border-radius: 2px; outline: none;
+  }
+  .param input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: #5080e0; cursor: pointer; border: 2px solid #1a1e28;
+  }
+  .param .val { font-size: 10px; color: #5a6070; font-family: 'SF Mono', monospace; width: 32px; text-align: right; }
+  button.preset {
+    background: rgba(80, 128, 224, 0.15); border: 1px solid rgba(80, 128, 224, 0.25);
+    color: #70a0e0; font-size: 10px; padding: 4px 10px; border-radius: 5px;
+    cursor: pointer; margin-right: 4px; margin-bottom: 4px; transition: all 0.15s;
+  }
+  button.preset:hover { background: rgba(80, 128, 224, 0.3); color: #a0c0f0; }
+  #toggle-panel {
+    position: fixed; top: 12px; right: 12px; z-index: 11;
+    background: rgba(10, 12, 18, 0.8); border: 1px solid rgba(255,255,255,0.1);
+    color: #8890a0; font-size: 16px; width: 32px; height: 32px;
+    border-radius: 8px; cursor: pointer; display: none; line-height: 30px; text-align: center;
+  }
+  #toggle-panel:hover { color: #c0c8d8; background: rgba(10, 12, 18, 0.95); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="toggle-panel">&#9881;</button>
+<div id="panel">
+  <h2>Terrain Shader</h2>
+
+  <div class="section">
+    <div class="section-title">Presets</div>
+    <button class="preset" onclick="applyPreset('default')">Default</button>
+    <button class="preset" onclick="applyPreset('alpine')">Alpine</button>
+    <button class="preset" onclick="applyPreset('archipelago')">Archipelago</button>
+    <button class="preset" onclick="applyPreset('flat')">Lowlands</button>
+    <button class="preset" onclick="applyPreset('dramatic')">Dramatic</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Terrain Shape</div>
+    <div class="param"><label>Scale</label><input type="range" id="p_scale" min="1" max="12" step="0.1" value="5"><span class="val"></span></div>
+    <div class="param"><label>Octaves</label><input type="range" id="p_octaves" min="1" max="8" step="1" value="6"><span class="val"></span></div>
+    <div class="param"><label>Lacunarity</label><input type="range" id="p_lacunarity" min="1.5" max="3" step="0.05" value="2.1"><span class="val"></span></div>
+    <div class="param"><label>Persistence</label><input type="range" id="p_persistence" min="0.2" max="0.7" step="0.01" value="0.48"><span class="val"></span></div>
+    <div class="param"><label>Ridge Mix</label><input type="range" id="p_ridgeMix" min="0" max="1" step="0.01" value="0.35"><span class="val"></span></div>
+    <div class="param"><label>Warp Strength</label><input type="range" id="p_warpStrength" min="0" max="1.5" step="0.01" value="0.45"><span class="val"></span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Land / Sea</div>
+    <div class="param"><label>Sea Level</label><input type="range" id="p_seaLevel" min="-0.3" max="0.3" step="0.01" value="-0.02"><span class="val"></span></div>
+    <div class="param"><label>Continental X</label><input type="range" id="p_contX" min="0.1" max="0.8" step="0.01" value="0.42"><span class="val"></span></div>
+    <div class="param"><label>Continental Y</label><input type="range" id="p_contY" min="0.1" max="0.8" step="0.01" value="0.42"><span class="val"></span></div>
+    <div class="param"><label>Land Spread</label><input type="range" id="p_landSpread" min="0.1" max="1.2" step="0.01" value="0.55"><span class="val"></span></div>
+    <div class="param"><label>Coast Sharpness</label><input type="range" id="p_coastSharp" min="0.01" max="0.3" step="0.005" value="0.08"><span class="val"></span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Lighting</div>
+    <div class="param"><label>Sun Angle</label><input type="range" id="p_sunAngle" min="0" max="6.28" step="0.01" value="2.4"><span class="val"></span></div>
+    <div class="param"><label>Sun Elevation</label><input type="range" id="p_sunElev" min="0.2" max="1.5" step="0.01" value="0.7"><span class="val"></span></div>
+    <div class="param"><label>Ambient</label><input type="range" id="p_ambient" min="0.1" max="0.7" step="0.01" value="0.32"><span class="val"></span></div>
+    <div class="param"><label>Shadow Depth</label><input type="range" id="p_shadowDepth" min="0" max="0.6" step="0.01" value="0.25"><span class="val"></span></div>
+    <div class="param"><label>Specular (water)</label><input type="range" id="p_specular" min="0" max="2" step="0.01" value="0.8"><span class="val"></span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Colors</div>
+    <div class="param"><label>Saturation</label><input type="range" id="p_saturation" min="0.3" max="2" step="0.01" value="1.0"><span class="val"></span></div>
+    <div class="param"><label>Warmth</label><input type="range" id="p_warmth" min="-0.3" max="0.3" step="0.01" value="0.0"><span class="val"></span></div>
+    <div class="param"><label>Snow Line</label><input type="range" id="p_snowLine" min="0.3" max="0.9" step="0.01" value="0.6"><span class="val"></span></div>
+    <div class="param"><label>Ocean Depth</label><input type="range" id="p_oceanDepth" min="0.1" max="1.5" step="0.01" value="0.6"><span class="val"></span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Effects</div>
+    <div class="param"><label>Vignette</label><input type="range" id="p_vignette" min="0" max="0.6" step="0.01" value="0.2"><span class="val"></span></div>
+    <div class="param"><label>Erosion</label><input type="range" id="p_erosion" min="0" max="1" step="0.01" value="0.4"><span class="val"></span></div>
+    <div class="param"><label>Water Anim</label><input type="range" id="p_waterAnim" min="0" max="1" step="0.01" value="0.5"><span class="val"></span></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+const MAP_W = 1835, MAP_H = 1360;
+
+// --- Params ---
+const P = {};
+const sliders = document.querySelectorAll('#panel input[type=range]');
+function syncParams() {
+  sliders.forEach(s => {
+    const key = s.id.replace('p_', '');
+    P[key] = parseFloat(s.value);
+    s.nextElementSibling.textContent = parseFloat(s.value).toFixed(2);
+  });
+}
+sliders.forEach(s => s.addEventListener('input', syncParams));
+syncParams();
+
+// Presets
+const PRESETS = {
+  default: { scale:5, octaves:6, lacunarity:2.1, persistence:0.48, ridgeMix:0.35, warpStrength:0.45, seaLevel:-0.02, contX:0.42, contY:0.42, landSpread:0.55, coastSharp:0.08, sunAngle:2.4, sunElev:0.7, ambient:0.32, shadowDepth:0.25, specular:0.8, saturation:1.0, warmth:0.0, snowLine:0.6, oceanDepth:0.6, vignette:0.2, erosion:0.4, waterAnim:0.5 },
+  alpine: { scale:7, octaves:7, lacunarity:2.2, persistence:0.52, ridgeMix:0.7, warpStrength:0.6, seaLevel:-0.08, contX:0.42, contY:0.42, landSpread:0.65, coastSharp:0.06, sunAngle:2.0, sunElev:0.5, ambient:0.28, shadowDepth:0.4, specular:0.6, saturation:0.85, warmth:-0.05, snowLine:0.45, oceanDepth:0.8, vignette:0.2, erosion:0.6, waterAnim:0.3 },
+  archipelago: { scale:4, octaves:5, lacunarity:2.0, persistence:0.45, ridgeMix:0.15, warpStrength:0.3, seaLevel:0.12, contX:0.45, contY:0.45, landSpread:0.4, coastSharp:0.04, sunAngle:2.8, sunElev:0.8, ambient:0.35, shadowDepth:0.15, specular:1.2, saturation:1.1, warmth:0.08, snowLine:0.8, oceanDepth:0.5, vignette:0.15, erosion:0.2, waterAnim:0.7 },
+  flat: { scale:3.5, octaves:5, lacunarity:2.0, persistence:0.4, ridgeMix:0.05, warpStrength:0.2, seaLevel:-0.1, contX:0.42, contY:0.42, landSpread:0.7, coastSharp:0.1, sunAngle:2.4, sunElev:1.0, ambient:0.4, shadowDepth:0.1, specular:0.5, saturation:1.15, warmth:0.05, snowLine:0.8, oceanDepth:0.4, vignette:0.2, erosion:0.1, waterAnim:0.4 },
+  dramatic: { scale:6, octaves:8, lacunarity:2.3, persistence:0.55, ridgeMix:0.6, warpStrength:0.8, seaLevel:0.0, contX:0.4, contY:0.4, landSpread:0.5, coastSharp:0.05, sunAngle:1.8, sunElev:0.4, ambient:0.22, shadowDepth:0.5, specular:1.5, saturation:0.9, warmth:-0.1, snowLine:0.5, oceanDepth:0.9, vignette:0.35, erosion:0.7, waterAnim:0.4 },
+};
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  for (const [k, v] of Object.entries(p)) {
+    const el = document.getElementById('p_' + k);
+    if (el) { el.value = v; }
+  }
+  syncParams();
+}
+
+// Toggle panel
+const panel = document.getElementById('panel');
+const toggleBtn = document.getElementById('toggle-panel');
+toggleBtn.addEventListener('click', () => {
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  toggleBtn.style.display = panel.style.display === 'none' ? '' : 'none';
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'h' || e.key === 'H') {
+    panel.style.display = panel.style.display === 'none' ? '' : 'none';
+    toggleBtn.style.display = panel.style.display === 'none' ? '' : 'none';
+  }
+});
+
+function resize() {
+  canvas.width = window.innerWidth * devicePixelRatio;
+  canvas.height = window.innerHeight * devicePixelRatio;
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+const vsrc = `
+  attribute vec2 a_pos;
+  varying vec2 v_uv;
+  void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+  }
+`;
+
+const fsrc = `
+  precision highp float;
+  varying vec2 v_uv;
+  uniform float u_time;
+  uniform vec2 u_resolution;
+
+  // Terrain params
+  uniform float u_scale;
+  uniform float u_octaves;
+  uniform float u_lacunarity;
+  uniform float u_persistence;
+  uniform float u_ridgeMix;
+  uniform float u_warpStrength;
+  uniform float u_seaLevel;
+  uniform float u_contX;
+  uniform float u_contY;
+  uniform float u_landSpread;
+  uniform float u_coastSharp;
+  uniform float u_sunAngle;
+  uniform float u_sunElev;
+  uniform float u_ambient;
+  uniform float u_shadowDepth;
+  uniform float u_specular;
+  uniform float u_saturation;
+  uniform float u_warmth;
+  uniform float u_snowLine;
+  uniform float u_oceanDepth;
+  uniform float u_vignette;
+  uniform float u_erosion;
+  uniform float u_waterAnim;
+
+  // --- Simplex noise (2D) ---
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+  vec2 mod289(vec2 x) { return x - floor(x * (1.0/289.0)) * 289.0; }
+  vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i = floor(v + dot(v, C.yy));
+    vec2 x0 = v - i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m; m = m*m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+  }
+
+  // Ridged noise — creates sharp mountain ridges
+  float ridgeNoise(vec2 p) {
+    float n = snoise(p);
+    n = 1.0 - abs(n);
+    return n * n;
+  }
+
+  // FBM with domain warping + ridge mixing
+  float fbm(vec2 p, float ridgeMix) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    float maxAmp = 0.0;
+    int oct = int(u_octaves);
+    for (int i = 0; i < 8; i++) {
+      if (i >= oct) break;
+      float smooth = snoise(p * frequency);
+      float ridge = ridgeNoise(p * frequency);
+      float n = mix(smooth, ridge, ridgeMix);
+      value += amplitude * n;
+      maxAmp += amplitude;
+      amplitude *= u_persistence;
+      frequency *= u_lacunarity;
+      // Rotate each octave slightly for less axis-aligned patterns
+      p = mat2(0.8, 0.6, -0.6, 0.8) * p;
+    }
+    return value / maxAmp;
+  }
+
+  // Domain warp — distort coordinates with another noise field
+  vec2 warp(vec2 p, float strength) {
+    float wx = snoise(p + vec2(1.7, 9.2));
+    float wy = snoise(p + vec2(8.3, 2.8));
+    return p + vec2(wx, wy) * strength;
+  }
+
+  // Erosion-like detail: carve fine valleys using derivative
+  float erosionDetail(vec2 p) {
+    float eps = 0.005;
+    float c = snoise(p * 12.0);
+    float dx = snoise((p + vec2(eps, 0.0)) * 12.0) - c;
+    float dy = snoise((p + vec2(0.0, eps)) * 12.0) - c;
+    return sqrt(dx*dx + dy*dy) * 8.0;
+  }
+
+  // Terrain coloring — rich earth tones
+  vec3 terrainColor(float h, float erosion, vec2 p) {
+    vec3 deepOcean  = vec3(0.02, 0.04, 0.10);
+    vec3 ocean      = vec3(0.04, 0.08, 0.18);
+    vec3 shallowSea = vec3(0.07, 0.13, 0.26);
+    vec3 coast      = vec3(0.45, 0.42, 0.35);
+    vec3 lowGrass   = vec3(0.22, 0.32, 0.15);
+    vec3 grass      = vec3(0.28, 0.38, 0.18);
+    vec3 forest     = vec3(0.18, 0.28, 0.12);
+    vec3 highland   = vec3(0.38, 0.34, 0.24);
+    vec3 rock       = vec3(0.42, 0.40, 0.36);
+    vec3 snow       = vec3(0.78, 0.76, 0.72);
+
+    float sl = u_seaLevel;
+    vec3 color;
+
+    if (h < sl - 0.25) {
+      color = mix(deepOcean, ocean, clamp((h - (sl - 0.5)) / 0.25, 0.0, 1.0));
+    } else if (h < sl - 0.03) {
+      color = mix(ocean, shallowSea, clamp((h - (sl - 0.25)) / 0.22, 0.0, 1.0));
+    } else if (h < sl + u_coastSharp) {
+      color = mix(shallowSea, coast, clamp((h - (sl - 0.03)) / (u_coastSharp + 0.03), 0.0, 1.0));
+    } else if (h < sl + 0.12) {
+      color = mix(coast, lowGrass, clamp((h - (sl + u_coastSharp)) / (0.12 - u_coastSharp), 0.0, 1.0));
+    } else if (h < sl + 0.25) {
+      // Mix between grass and forest using noise for natural patches
+      float forestMix = snoise(p * 20.0) * 0.5 + 0.5;
+      vec3 vegColor = mix(grass, forest, forestMix * 0.6);
+      color = mix(lowGrass, vegColor, clamp((h - (sl + 0.12)) / 0.13, 0.0, 1.0));
+    } else if (h < u_snowLine - 0.1) {
+      float forestMix = snoise(p * 15.0 + vec2(3.0)) * 0.5 + 0.5;
+      vec3 vegColor = mix(grass, forest, forestMix * 0.5);
+      color = mix(vegColor, highland, clamp((h - (sl + 0.25)) / (u_snowLine - 0.1 - sl - 0.25), 0.0, 1.0));
+    } else if (h < u_snowLine) {
+      color = mix(highland, rock, clamp((h - (u_snowLine - 0.1)) / 0.1, 0.0, 1.0));
+    } else {
+      float snowMix = clamp((h - u_snowLine) / 0.15, 0.0, 1.0);
+      // Patchy snow using noise
+      float snowNoise = snoise(p * 30.0) * 0.3 + 0.5;
+      snowMix *= smoothstep(0.2, 0.6, snowMix + snowNoise * 0.3);
+      color = mix(rock, snow, snowMix);
+    }
+
+    // Erosion darkens valleys
+    if (h > sl) {
+      float erode = erosion * u_erosion * 0.3;
+      color *= 1.0 - erode;
+    }
+
+    return color;
+  }
+
+  // Water with depth, caustics, and specular
+  vec3 waterColor(float h, vec2 p) {
+    float sl = u_seaLevel;
+    float depth = clamp((sl - h) / (u_oceanDepth * 0.5), 0.0, 1.0);
+
+    vec3 shallow = vec3(0.08, 0.14, 0.28);
+    vec3 deep = vec3(0.015, 0.025, 0.07);
+    vec3 base = mix(shallow, deep, depth * depth);
+
+    // Caustic ripples
+    float anim = u_time * 0.03 * u_waterAnim;
+    float c1 = snoise(p * 18.0 + vec2(anim, anim * 0.7)) * 0.5 + 0.5;
+    float c2 = snoise(p * 25.0 - vec2(anim * 0.5, anim * 1.1)) * 0.5 + 0.5;
+    float caustic = c1 * c2;
+    caustic = pow(caustic, 2.0);
+    base += vec3(0.015, 0.025, 0.05) * caustic * (1.0 - depth) * u_waterAnim;
+
+    // Subtle wave pattern at surface
+    float wave = snoise(p * 40.0 + vec2(anim * 2.0, 0.0)) * 0.02 * (1.0 - depth);
+    base += vec3(wave * 0.5, wave * 0.7, wave);
+
+    return base;
+  }
+
+  // Saturation adjustment
+  vec3 adjustSaturation(vec3 c, float sat) {
+    float grey = dot(c, vec3(0.299, 0.587, 0.114));
+    return mix(vec3(grey), c, sat);
+  }
+
+  void main() {
+    vec2 uv = v_uv;
+    float aspect = u_resolution.x / u_resolution.y;
+    float mapAspect = float(${MAP_W}) / float(${MAP_H});
+
+    vec2 p = uv;
+    p.x *= aspect / mapAspect;
+
+    // Domain warp for organic shapes
+    vec2 wp = warp(p * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15);
+    vec2 wp2 = warp(wp, u_warpStrength * 0.08); // second warp pass
+
+    // Generate warped heightmap
+    float h = fbm(wp2, u_ridgeMix);
+
+    // Continental shaping — elliptical land mass
+    float dx = (p.x - u_contX) * 1.3;
+    float dy = (p.y - u_contY) * 1.6;
+    float landDist = sqrt(dx*dx + dy*dy);
+    float landMask = 1.0 - smoothstep(u_landSpread * 0.3, u_landSpread, landDist);
+
+    // Secondary land blob (Scandinavia-ish)
+    float dx2 = (p.x - (u_contX + 0.05)) * 2.0;
+    float dy2 = (p.y - (u_contY - 0.25)) * 1.0;
+    float land2 = 1.0 - smoothstep(0.1, 0.35, sqrt(dx2*dx2 + dy2*dy2));
+    landMask = max(landMask, land2 * 0.7);
+
+    h = h * 0.65 + landMask * 0.45 - 0.1;
+
+    // Erosion detail
+    float erode = erosionDetail(wp2);
+
+    // Compute normal via finite differences for lighting
+    float eps = 0.0015;
+    vec2 oL = warp((p + vec2(-eps, 0.0)) * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15);
+    oL = warp(oL, u_warpStrength * 0.08);
+    float hL = fbm(oL, u_ridgeMix) * 0.65 + landMask * 0.45 - 0.1;
+
+    vec2 oR = warp((p + vec2(eps, 0.0)) * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15);
+    oR = warp(oR, u_warpStrength * 0.08);
+    float hR = fbm(oR, u_ridgeMix) * 0.65 + landMask * 0.45 - 0.1;
+
+    vec2 oU = warp((p + vec2(0.0, eps)) * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15);
+    oU = warp(oU, u_warpStrength * 0.08);
+    float hU = fbm(oU, u_ridgeMix) * 0.65 + landMask * 0.45 - 0.1;
+
+    vec2 oD = warp((p + vec2(0.0, -eps)) * u_scale * 0.5 + vec2(1.7, 3.2), u_warpStrength * 0.15);
+    oD = warp(oD, u_warpStrength * 0.08);
+    float hD = fbm(oD, u_ridgeMix) * 0.65 + landMask * 0.45 - 0.1;
+
+    vec3 normal = normalize(vec3(hL - hR, hD - hU, eps * 5.0));
+
+    // Directional light
+    vec3 lightDir = normalize(vec3(
+      cos(u_sunAngle) * cos(u_sunElev),
+      sin(u_sunAngle) * cos(u_sunElev),
+      sin(u_sunElev)
+    ));
+    float diffuse = max(dot(normal, lightDir), 0.0);
+
+    // Shadow approximation — darken steep slopes facing away from light
+    float shadow = 1.0 - u_shadowDepth * max(0.0, -dot(normal, lightDir));
+
+    float lighting = u_ambient + (1.0 - u_ambient) * diffuse * shadow;
+
+    // Color
+    vec3 color;
+    float sl = u_seaLevel;
+
+    if (h < sl) {
+      color = waterColor(h, p);
+
+      // Specular highlight on water
+      vec3 viewDir = vec3(0.0, 0.0, 1.0);
+      vec3 halfDir = normalize(lightDir + viewDir);
+      // Perturb water normal with ripples
+      float anim = u_time * 0.03 * u_waterAnim;
+      vec3 waterNorm = normal;
+      waterNorm.x += snoise(p * 30.0 + vec2(anim)) * 0.02;
+      waterNorm.y += snoise(p * 30.0 + vec2(0.0, anim)) * 0.02;
+      waterNorm = normalize(waterNorm);
+      float spec = pow(max(dot(waterNorm, halfDir), 0.0), 40.0);
+      float depth = clamp((sl - h) / (u_oceanDepth * 0.5), 0.0, 1.0);
+      color += vec3(0.6, 0.7, 0.9) * spec * u_specular * 0.15 * (1.0 - depth * 0.5);
+    } else {
+      color = terrainColor(h, erode, p) * lighting;
+
+      // Ambient occlusion approximation — valleys are darker
+      float ao = 1.0 - clamp((h - hL + h - hR + h - hU + h - hD) * -2.0, 0.0, 0.3);
+      color *= ao;
+    }
+
+    // Temperature/warmth shift
+    color.r += u_warmth * 0.08;
+    color.b -= u_warmth * 0.05;
+
+    // Saturation
+    color = adjustSaturation(color, u_saturation);
+
+    // Vignette
+    float vig = 1.0 - u_vignette * length((v_uv - 0.5) * 1.8);
+    color *= vig;
+
+    // Tone mapping (gentle filmic)
+    color = color / (color + 0.5) * 1.4;
+
+    // Gamma
+    color = pow(max(color, 0.0), vec3(1.0 / 2.2));
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+function compile(type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error('Shader compile error:', gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+const prog = gl.createProgram();
+const vs = compile(gl.VERTEX_SHADER, vsrc);
+const fs = compile(gl.FRAGMENT_SHADER, fsrc);
+if (!vs || !fs) {
+  document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace">Shader compilation failed — check console</div>';
+}
+gl.attachShader(prog, vs);
+gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+  console.error('Program link error:', gl.getProgramInfoLog(prog));
+}
+gl.useProgram(prog);
+
+// Fullscreen quad
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'a_pos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+// Get uniform locations
+const uniforms = {};
+const uNames = [
+  'u_time', 'u_resolution',
+  'u_scale', 'u_octaves', 'u_lacunarity', 'u_persistence',
+  'u_ridgeMix', 'u_warpStrength', 'u_seaLevel', 'u_contX', 'u_contY',
+  'u_landSpread', 'u_coastSharp', 'u_sunAngle', 'u_sunElev',
+  'u_ambient', 'u_shadowDepth', 'u_specular', 'u_saturation',
+  'u_warmth', 'u_snowLine', 'u_oceanDepth', 'u_vignette',
+  'u_erosion', 'u_waterAnim'
+];
+for (const n of uNames) {
+  uniforms[n] = gl.getUniformLocation(prog, n);
+}
+
+function render(t) {
+  gl.uniform1f(uniforms.u_time, t * 0.001);
+  gl.uniform2f(uniforms.u_resolution, canvas.width, canvas.height);
+
+  // Push all params
+  gl.uniform1f(uniforms.u_scale, P.scale);
+  gl.uniform1f(uniforms.u_octaves, P.octaves);
+  gl.uniform1f(uniforms.u_lacunarity, P.lacunarity);
+  gl.uniform1f(uniforms.u_persistence, P.persistence);
+  gl.uniform1f(uniforms.u_ridgeMix, P.ridgeMix);
+  gl.uniform1f(uniforms.u_warpStrength, P.warpStrength);
+  gl.uniform1f(uniforms.u_seaLevel, P.seaLevel);
+  gl.uniform1f(uniforms.u_contX, P.contX);
+  gl.uniform1f(uniforms.u_contY, P.contY);
+  gl.uniform1f(uniforms.u_landSpread, P.landSpread);
+  gl.uniform1f(uniforms.u_coastSharp, P.coastSharp);
+  gl.uniform1f(uniforms.u_sunAngle, P.sunAngle);
+  gl.uniform1f(uniforms.u_sunElev, P.sunElev);
+  gl.uniform1f(uniforms.u_ambient, P.ambient);
+  gl.uniform1f(uniforms.u_shadowDepth, P.shadowDepth);
+  gl.uniform1f(uniforms.u_specular, P.specular);
+  gl.uniform1f(uniforms.u_saturation, P.saturation);
+  gl.uniform1f(uniforms.u_warmth, P.warmth);
+  gl.uniform1f(uniforms.u_snowLine, P.snowLine);
+  gl.uniform1f(uniforms.u_oceanDepth, P.oceanDepth);
+  gl.uniform1f(uniforms.u_vignette, P.vignette);
+  gl.uniform1f(uniforms.u_erosion, P.erosion);
+  gl.uniform1f(uniforms.u_waterAnim, P.waterAnim);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

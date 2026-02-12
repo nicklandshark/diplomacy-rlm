@@ -167,10 +167,13 @@ export async function POST(request: Request) {
       fs.writeFileSync(path.join(gameDir, ".pid"), String(child.pid));
     }
 
-    // Write game metadata so AI summary can use the same provider
+    // Write game metadata so AI summary and rating systems can identify agents.
+    const powersMeta = Object.fromEntries(
+      powersUpper.map((power) => [power, { backend, model }]),
+    );
     fs.writeFileSync(
       path.join(gameDir, ".game_meta.json"),
-      JSON.stringify({ backend, model }),
+      JSON.stringify({ backend, model, powers: powersMeta }),
     );
 
     return NextResponse.json({

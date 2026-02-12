@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 
 interface Props {
-  distortion?: number; // 0.0 to 0.3, default 0.15
+  distortion?: number; // 0.0 to 0.5, default 0.15
 }
 
 export default function CRTDistortion({ distortion = 0.15 }: Props) {
@@ -19,6 +19,10 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
       return;
     }
 
+    // Track whether this effect instance is still alive (for RAF cleanup)
+    let alive = true;
+    let rafId = 0;
+
     // Vertex shader - simple pass-through
     const vertexShaderSource = `
       attribute vec2 a_position;
@@ -31,7 +35,7 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
       }
     `;
 
-    // Fragment shader - barrel distortion
+    // Fragment shader - barrel distortion curvature mask with smooth falloff
     const fragmentShaderSource = `
       precision mediump float;
       varying vec2 v_texCoord;
@@ -40,33 +44,37 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
       void main() {
         vec2 coord = v_texCoord - 0.5;
         float dist = length(coord);
-        float distortion = 1.0 + u_distortion * dist * dist;
-        coord *= distortion;
-        coord += 0.5;
 
-        // Vignette at edges where distortion goes out of bounds
-        float edge = smoothstep(0.0, 0.05, coord.x) *
-                     smoothstep(0.0, 0.05, coord.y) *
-                     smoothstep(0.0, 0.05, 1.0 - coord.x) *
-                     smoothstep(0.0, 0.05, 1.0 - coord.y);
+        // Barrel distortion warp formula
+        float warp = 1.0 + u_distortion * dist * dist;
+        vec2 warped = coord * warp + 0.5;
 
-        // Output black with alpha for edge vignette effect
-        if (coord.x < 0.0 || coord.x > 1.0 || coord.y < 0.0 || coord.y > 1.0) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        } else {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 - edge);
-        }
+        // Soft edge mask — wider transition zone for visible curvature
+        float edge = smoothstep(-0.02, 0.08, warped.x) *
+                     smoothstep(-0.02, 0.08, warped.y) *
+                     smoothstep(-0.02, 0.08, 1.0 - warped.x) *
+                     smoothstep(-0.02, 0.08, 1.0 - warped.y);
+
+        // Barrel curvature darkening — follows r² curve from center
+        float curveDark = smoothstep(0.35, 0.7, dist) * 0.25;
+
+        // Combine: out-of-bounds = full black, edge = barrel vignette
+        float outOfBounds = step(0.0, warped.x) * step(warped.x, 1.0) *
+                            step(0.0, warped.y) * step(warped.y, 1.0);
+        float alpha = mix(1.0, (1.0 - edge) + curveDark, outOfBounds);
+
+        gl_FragColor = vec4(0.0, 0.0, 0.0, clamp(alpha, 0.0, 1.0));
       }
     `;
 
-    function createShader(gl: WebGLRenderingContext, type: number, source: string) {
-      const shader = gl.createShader(type);
+    function createShader(glCtx: WebGLRenderingContext, type: number, source: string) {
+      const shader = glCtx.createShader(type);
       if (!shader) return null;
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error("Shader compile error:", gl.getShaderInfoLog(shader));
-        gl.deleteShader(shader);
+      glCtx.shaderSource(shader, source);
+      glCtx.compileShader(shader);
+      if (!glCtx.getShaderParameter(shader, glCtx.COMPILE_STATUS)) {
+        console.error("Shader compile error:", glCtx.getShaderInfoLog(shader));
+        glCtx.deleteShader(shader);
         return null;
       }
       return shader;
@@ -89,7 +97,7 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
 
     gl.useProgram(program);
 
-    // Create quad vertices
+    // Create quad vertices (position + texcoord interleaved)
     const positions = new Float32Array([
       -1, -1, 0, 0,
        1, -1, 1, 0,
@@ -112,9 +120,12 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
     gl.enableVertexAttribArray(texCoordLocation);
     gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 16, 8);
 
+    // Enable blending for proper alpha compositing
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
     function resize() {
-      const canvas = canvasRef.current;
-      if (!canvas || !gl) return;
+      if (!alive || !canvas || !gl) return;
       const parent = canvas.parentElement;
       if (!parent) return;
       canvas.width = parent.clientWidth;
@@ -126,19 +137,22 @@ export default function CRTDistortion({ distortion = 0.15 }: Props) {
     window.addEventListener("resize", resize);
 
     function render() {
-      if (!gl || !program || !canvas) return;
+      if (!alive || !gl || !canvas) return;
 
+      gl.useProgram(program);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(distortionLocation, distortion);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-      requestAnimationFrame(render);
+      rafId = requestAnimationFrame(render);
     }
 
     render();
 
     return () => {
+      alive = false;
+      cancelAnimationFrame(rafId);
       window.removeEventListener("resize", resize);
       gl.deleteProgram(program);
       gl.deleteShader(vertexShader);

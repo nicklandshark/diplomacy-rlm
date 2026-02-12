@@ -16,6 +16,7 @@ import { useLiveMessages } from "@/hooks/useLiveMessages";
 import { phaseDisplayName, POWER_DISPLAY_COLORS } from "@/lib/constants";
 import { parseOrder } from "@/lib/parse-orders";
 import type { LiveEvent } from "@/lib/types";
+import { soundPhaseComplete, soundOrderSubmitted, soundMessageReceived, soundGameHalted } from "@/lib/sounds";
 import { OrderPanel } from "./OrderPanel";
 import { MessagePanel } from "./MessagePanel";
 import { SummaryPanel } from "./SummaryPanel";
@@ -23,6 +24,8 @@ import { PhaseTimeline } from "./PhaseTimeline";
 import { PhaseTransition } from "./PhaseTransition";
 import { ActivityFeed } from "./ActivityFeed";
 import { TacticalPanel, Rivet, TacticalTabGroup, GlassPane } from "@/app/military-ui-kit/components";
+import CRTScreenOverlay from "./CRTScreenOverlay";
+import { LeaderboardDrawer } from "./LeaderboardDrawer";
 
 // Pixel art flag icons for each power
 const PixelFlagIcon = ({ power, size = 20 }: { power: string; size?: number }) => {
@@ -91,6 +94,7 @@ interface Props {
 }
 
 type LeftTab = "orders" | "messages" | "summary";
+type ActivitySplitBreakpoint = "compact" | "normal" | "wide";
 
 const MAP_MONITOR_LAYOUT = {
   mapAspect: 1835 / 1360,
@@ -102,6 +106,12 @@ const MAP_MONITOR_LAYOUT = {
   minActivityPct: 12,
   maxActivityPct: 52,
 } as const;
+
+function getActivitySplitBreakpoint(width: number): ActivitySplitBreakpoint {
+  if (width < 900) return "compact";
+  if (width < 1320) return "normal";
+  return "wide";
+}
 
 function fallbackFocusLocation(rawOrder: string): string | null {
   // Accept common display/order formats and pick the most likely destination first.
@@ -142,10 +152,21 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
   const [hoveredOrder, setHoveredOrder] = useState<string | null>(null);
   const [hoveredFactionTab, setHoveredFactionTab] = useState<string | null>(null);
   const [hoveredTopButton, setHoveredTopButton] = useState<"leaderboard" | "cancel" | null>(null);
+  const [gameMeta, setGameMeta] = useState<{ backend: string | null; model: string | null } | null>(null);
   const [pressedTopButton, setPressedTopButton] = useState<"leaderboard" | "cancel" | null>(null);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [activityHeightPct, setActivityHeightPct] = useState(24);
   const centerColumnRef = useRef<HTMLDivElement>(null);
   const userResizedActivityRef = useRef(false);
+  const splitBreakpointRef = useRef<ActivitySplitBreakpoint>("wide");
+
+  // Fetch game meta for footer model display
+  useEffect(() => {
+    fetch(`/api/games/${gameId}/meta`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setGameMeta({ backend: d.backend, model: d.model }); })
+      .catch(() => {});
+  }, [gameId]);
 
   // Playback state
   const [playing, setPlaying] = useState(false);
@@ -155,12 +176,22 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
   // Live data
   const onEvent = useCallback((event: LiveEvent) => {
-    if (event.event_type === "snapshot.saved" || event.event_type === "phase.end") {
+    if (event.event_type === "snapshot.saved") {
+      refreshPhases();
+      setDataRefreshKey(k => k + 1);
+      soundPhaseComplete();
+    } else if (event.event_type === "phase.end") {
       refreshPhases();
       setDataRefreshKey(k => k + 1);
     } else if (event.event_type === "memory.changed" && event.power) {
       setSelectedPower(event.power);
       setMemoryRefreshKey(k => k + 1);
+    } else if (event.event_type === "orders.submitted") {
+      soundOrderSubmitted();
+    } else if (event.event_type === "message.flushed") {
+      soundMessageReceived();
+    } else if (event.event_type === "game.halt" || event.event_type === "game.end") {
+      soundGameHalted();
     }
   }, [refreshPhases]);
 
@@ -215,6 +246,16 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
     }
     return null;
   }, [liveEvents.events]);
+
+  const memoryLastUpdated = useMemo(() => {
+    for (let i = liveEvents.events.length - 1; i >= 0; i--) {
+      const ev = liveEvents.events[i];
+      if (ev.event_type === "memory.changed" && ev.power === selectedPower) {
+        return ev.ts_wall;
+      }
+    }
+    return undefined;
+  }, [liveEvents.events, selectedPower]);
 
   // Merge orders with live pending
   const displayOrders = useMemo(() => {
@@ -325,6 +366,18 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
     if (playTimerRef.current) clearTimeout(playTimerRef.current);
   }, []);
 
+  const handleCancelGame = useCallback(async () => {
+    handleCancelPlayback();
+    if (!confirm("Stop this game? The process will be terminated.")) return;
+    try {
+      const res = await fetch(`/api/games/${gameId}/stop`, { method: "POST", signal: AbortSignal.timeout(10_000) });
+      const data = await res.json();
+      if (!res.ok) alert(data.error || "Failed to stop game");
+    } catch {
+      alert("Failed to stop game");
+    }
+  }, [gameId, handleCancelPlayback]);
+
   const startActivityResize = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -368,14 +421,33 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
     document.addEventListener("mouseup", onUp);
   }, [activityHeightPct]);
 
+  const getActivitySplitBounds = useCallback((hostHeight: number) => {
+    const minPctByActivity = (MAP_MONITOR_LAYOUT.minActivityHeightPx / hostHeight) * 100;
+    const maxPctByMap =
+      100 -
+      ((MAP_MONITOR_LAYOUT.minMapHeightPx +
+        MAP_MONITOR_LAYOUT.mapTopInsetPx +
+        MAP_MONITOR_LAYOUT.mapActivityGapPx) /
+        hostHeight) *
+        100;
+    const minPct = Math.max(MAP_MONITOR_LAYOUT.minActivityPct, minPctByActivity);
+    const maxPct = Math.min(MAP_MONITOR_LAYOUT.maxActivityPct, maxPctByMap);
+    return { minPct, maxPct: Math.max(minPct, maxPct) };
+  }, []);
+
   // Auto-tune default CRT/activity split to preserve map framing across viewport sizes.
   const applyDefaultActivitySplit = useCallback((force = false) => {
     const host = centerColumnRef.current;
     if (!host) return;
-    if (!force && userResizedActivityRef.current) return;
 
     const rect = host.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
+
+    const { minPct, maxPct } = getActivitySplitBounds(rect.height);
+    if (!force && userResizedActivityRef.current) {
+      setActivityHeightPct((prev) => Math.min(Math.max(prev, minPct), maxPct));
+      return;
+    }
 
     const usableMapWidth = Math.max(0, rect.width - MAP_MONITOR_LAYOUT.mapSideInsetPx);
     const desiredMapHeight = usableMapWidth / MAP_MONITOR_LAYOUT.mapAspect;
@@ -385,28 +457,29 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
       MAP_MONITOR_LAYOUT.mapActivityGapPx -
       desiredMapHeight;
     const desiredPct = (desiredActivityHeight / rect.height) * 100;
-
-    const minPctByActivity = (MAP_MONITOR_LAYOUT.minActivityHeightPx / rect.height) * 100;
-    const maxPctByMap =
-      100 -
-      ((MAP_MONITOR_LAYOUT.minMapHeightPx +
-        MAP_MONITOR_LAYOUT.mapTopInsetPx +
-        MAP_MONITOR_LAYOUT.mapActivityGapPx) /
-        rect.height) *
-        100;
-    const minPct = Math.max(MAP_MONITOR_LAYOUT.minActivityPct, minPctByActivity);
-    const maxPct = Math.min(MAP_MONITOR_LAYOUT.maxActivityPct, maxPctByMap);
     const safePct = Math.min(Math.max(desiredPct, minPct), Math.max(minPct, maxPct));
 
     setActivityHeightPct(safePct);
-  }, []);
+  }, [getActivitySplitBounds]);
 
   useEffect(() => {
     const host = centerColumnRef.current;
     if (!host || typeof ResizeObserver === "undefined") return;
 
-    applyDefaultActivitySplit();
-    const observer = new ResizeObserver(() => applyDefaultActivitySplit());
+    const syncActivitySplit = () => {
+      const rect = host.getBoundingClientRect();
+      const nextBreakpoint = getActivitySplitBreakpoint(rect.width);
+      if (splitBreakpointRef.current !== nextBreakpoint) {
+        splitBreakpointRef.current = nextBreakpoint;
+        userResizedActivityRef.current = false;
+        applyDefaultActivitySplit(true);
+        return;
+      }
+      applyDefaultActivitySplit();
+    };
+
+    syncActivitySplit();
+    const observer = new ResizeObserver(syncActivitySplit);
     observer.observe(host);
     return () => observer.disconnect();
   }, [applyDefaultActivitySplit]);
@@ -470,7 +543,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setLeftTab("summary")}
+              onClick={() => setLeaderboardOpen(true)}
               onMouseEnter={() => setHoveredTopButton("leaderboard")}
               onMouseLeave={() => {
                 setHoveredTopButton((prev) => (prev === "leaderboard" ? null : prev));
@@ -507,7 +580,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
             <button
               type="button"
-              onClick={handleCancelPlayback}
+              onClick={handleCancelGame}
               onMouseEnter={() => setHoveredTopButton("cancel")}
               onMouseLeave={() => {
                 setHoveredTopButton((prev) => (prev === "cancel" ? null : prev));
@@ -809,6 +882,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
                   id="activity-feed-panel"
                   events={liveEvents.events}
                   connected={liveEvents.connected}
+                  connectionError={liveEvents.error}
                   gameLog={gameLog}
                   livePhase={livePhase}
                   liveStep={liveStep}
@@ -966,47 +1040,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
 
             <div className="relative h-[calc(100%-56px)] overflow-hidden">
               <div className="absolute inset-2 rounded-[8px] border border-[#11161c] bg-[#030708] shadow-[inset_0_2px_10px_rgba(0,0,0,0.78),inset_0_0_0_1px_rgba(102,138,164,0.12)] overflow-hidden">
-                <div
-                  className="pointer-events-none absolute inset-0 memory-crt-scan"
-                  style={{
-                    opacity: 0.88,
-                    background:
-                      "repeating-linear-gradient(0deg, rgba(0,0,0,0.14) 0px, rgba(0,0,0,0.14) 1px, rgba(0,0,0,0.54) 1px, rgba(0,0,0,0.54) 3px), radial-gradient(ellipse at 50% 40%, rgba(90,170,160,0.16) 0%, rgba(90,170,160,0.06) 48%, transparent 76%)",
-                  }}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 mix-blend-screen"
-                  style={{
-                    opacity: 0.46,
-                    background:
-                      "linear-gradient(90deg, rgba(78,136,194,0.12) 0%, transparent 30%, transparent 70%, rgba(109,198,167,0.16) 100%)",
-                    transform: "translateX(-1px)",
-                  }}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 mix-blend-screen"
-                  style={{
-                    opacity: 0.34,
-                    background:
-                      "linear-gradient(90deg, rgba(112,206,173,0.16) 0%, transparent 34%, transparent 66%, rgba(104,160,220,0.12) 100%)",
-                    transform: "translateX(1px)",
-                  }}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0 memory-crt-bloom"
-                  style={{
-                    opacity: 0.4,
-                    background:
-                      "radial-gradient(ellipse at 50% 45%, rgba(132,236,194,0.16) 0%, rgba(92,170,148,0.06) 52%, transparent 82%)",
-                  }}
-                />
-                <div
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    background: "radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.72) 100%)",
-                  }}
-                />
-                <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_72px_rgba(0,0,0,0.78)]" />
+                <CRTScreenOverlay color="cyan" />
                 <div className="h-full overflow-hidden px-4 py-2.5 relative z-10">
                   {memoryLoading && (
                     <div className="text-[#6d8e79] text-sm">Loading memory...</div>
@@ -1015,7 +1049,7 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
                     <MemoryViewer
                       content={memoryContent}
                       variant="microfiche"
-                      lastUpdated={memoryRefreshKey}
+                      lastUpdated={memoryLastUpdated}
                       className="memory-fiche h-full bg-transparent border-0 rounded-none shadow-none"
                     />
                   )}
@@ -1029,66 +1063,101 @@ export default function MilitaryGameView({ gameId, initialPhases, svgContent }: 
         </div>
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-3 py-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded text-xs text-[#808080]">
-        <span className="flex items-center gap-2">
-          <strong className="text-[#e0e0e0]">
-            {nav.currentPhase && phaseDisplayName(nav.currentPhase)}
-          </strong>
-          <span className="text-[#666]">
-            ({nav.currentIndex + 1} of {phases.length})
-          </span>
-          {liveEvents.connected && (
-            <span className="relative flex h-1.5 w-1.5 ml-1">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4a7c59] opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#4a7c59]" />
+      {/* Footer status bar */}
+      <div
+        className="flex items-center justify-between px-5 py-2"
+        style={{
+          background: "linear-gradient(180deg, #1e1e1e 0%, #151515 100%)",
+          borderTop: "2px solid #0a0a0a",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.02)",
+        }}
+      >
+        {/* Left: Sedona branding + GitHub */}
+        <div className="flex items-center gap-4">
+          <a
+            href="https://sedona.fun"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 transition-opacity hover:opacity-80"
+            title="Powered by Sedona"
+          >
+            <svg width={16} height={15} viewBox="0 0 22 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <g clipPath="url(#clip0_footer)">
+                <path d="M2.10018 10.9454C2.20396 10.8342 2.23833 10.6822 2.24933 10.5323C2.26032 10.2764 2.25551 10.0219 2.27201 9.76536C2.58748 5.28827 6.58758 1.90596 11.2056 2.2118C12.4833 2.29643 13.6743 2.65425 14.7225 3.2233C15.0407 3.39521 15.0627 3.83033 14.7623 4.03023L13.4902 4.87381L13.4771 4.88247L18.1755 6.76753C18.1721 6.76086 18.1686 6.7542 18.1645 6.74754L20.6876 7.75836C20.801 7.80368 20.9206 7.71105 20.902 7.59445C20.902 7.59311 20.9013 7.59111 20.9013 7.58978L20.8993 7.58045L19.6346 1.05572C19.6133 0.947769 19.4855 0.896462 19.392 0.958431L17.8112 2.00724C17.5432 2.18582 17.1878 2.18049 16.9253 1.99458C15.3548 0.876472 13.4482 0.163495 11.3602 0.0248975C5.49545 -0.363575 0.41698 3.93094 0.0162825 9.6161C0.00253649 9.93194 -0.0744413 10.3997 0.273333 10.555C0.556502 10.6822 0.874723 10.7982 1.16751 10.9194C1.56202 11.0767 1.8067 11.2106 2.10018 10.9454Z" fill="#8f8776"/>
+                <path d="M20.9768 9.44559C20.6936 9.31832 20.3754 9.20238 20.0826 9.0811C19.6881 8.92385 19.4434 8.78991 19.1499 9.05512C19.0462 9.16639 19.0118 9.31832 19.0008 9.46824C18.9898 9.72412 18.9946 9.97865 18.9781 10.2352C18.6626 14.7123 14.6625 18.0946 10.0446 17.7887C8.76687 17.7041 7.57577 17.3463 6.52764 16.7773C6.20942 16.6053 6.18742 16.1702 6.48778 15.9703L7.75997 15.1267L7.77303 15.1181L3.07463 13.233C3.07807 13.2397 3.08151 13.2464 3.08563 13.253L0.562545 12.2422C0.449141 12.1969 0.32955 12.2895 0.348107 12.4061C0.348107 12.4074 0.348794 12.4094 0.348794 12.4108L0.350856 12.4201L1.61549 18.9448C1.6368 19.0528 1.76464 19.1041 1.85811 19.0421L3.4389 17.9933C3.70695 17.8147 4.06229 17.8201 4.32484 18.006C5.89532 19.1241 7.8019 19.8371 9.88992 19.9757C15.7547 20.3641 20.8331 16.0696 21.2338 10.3845C21.2476 10.0686 21.3246 9.60084 20.9768 9.44559Z" fill="#8f8776"/>
+                <path d="M10.71 4.90529C10.2639 7.31809 8.63708 9.39172 6.39029 9.84483C6.36555 9.85216 6.33462 9.85882 6.30094 9.86548C6.19166 9.88614 6.18753 10.0374 6.29613 10.0621C8.68244 10.5971 10.4701 12.6967 10.7519 15.3961C10.7828 15.6326 10.798 15.7166 10.8172 15.6479C10.8364 15.7166 10.8516 15.6326 10.8825 15.3961C11.1643 12.6967 12.952 10.5971 15.3383 10.0621C15.4469 10.0374 15.4427 9.88614 15.3335 9.86548C15.2998 9.85882 15.2689 9.85216 15.2441 9.84483C12.9973 9.39172 11.3705 7.31809 10.9244 4.90529C10.9134 4.84799 10.8653 4.82067 10.8179 4.824C10.7698 4.82067 10.7217 4.84799 10.7114 4.90529H10.71Z" fill="#8f8776"/>
+              </g>
+              <defs><clipPath id="clip0_footer"><rect width="21.25" height="20" fill="white"/></clipPath></defs>
+            </svg>
+            <span className="font-ui-panel text-[11px] uppercase tracking-[0.14em] text-[#8f8776]">
+              Powered by <span className="text-[#ff9500]">sedona.fun</span>
+            </span>
+          </a>
+          <span className="text-[#2a2a2a]">|</span>
+          <a
+            href="https://github.com/anthropics/diplomacy-rlm"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-ui-panel text-[11px] uppercase tracking-[0.1em] text-[#606060] hover:text-[#c3ae88] transition-colors"
+          >
+            GitHub
+          </a>
+        </div>
+
+        {/* Center: Model badge (prominent) + phase info */}
+        <div className="flex items-center gap-3">
+          {gameMeta?.model && (
+            <span
+              className="font-ui-panel text-[11px] font-semibold uppercase tracking-[0.08em] px-3 py-1 rounded-sm"
+              style={{
+                background: "linear-gradient(180deg, #2a2518 0%, #1e1b14 100%)",
+                border: "1px solid #3a3020",
+                color: "#ff9500",
+                boxShadow: "inset 0 1px 0 rgba(255,149,0,0.06), 0 1px 3px rgba(0,0,0,0.3)",
+                textShadow: "0 0 6px rgba(255,149,0,0.25)",
+              }}
+              title={`Backend: ${gameMeta.backend || "unknown"} | Model: ${gameMeta.model}`}
+            >
+              {gameMeta.model}
             </span>
           )}
-        </span>
-        <span className="flex items-center gap-3">
+          <span className="font-ui-panel text-[11px] font-semibold tracking-[0.08em] text-[#c3ae88]">
+            {nav.currentPhase && phaseDisplayName(nav.currentPhase)}
+          </span>
+          <span className="font-ui-panel text-[10px] text-[#606060]">
+            {nav.currentIndex + 1}/{phases.length}
+          </span>
+          {liveEvents.connected && (
+            <span className="relative flex h-2 w-2 ml-0.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4a7c59] opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4a7c59]" />
+            </span>
+          )}
+        </div>
+
+        {/* Right: Export + phase count */}
+        <div className="flex items-center gap-4">
           <a
             href={`/api/games/${gameId}/export`}
             download={`${gameId}-replay.json`}
-            className="text-[#666] hover:text-[#e0e0e0] transition-colors"
+            className="font-ui-panel text-[11px] uppercase tracking-[0.1em] text-[#606060] hover:text-[#c3ae88] transition-colors"
             title="Export replay JSON"
           >
-            ↓ Export
+            &#8595; Export
           </a>
-          <span className="text-[#666]">
+          <span className="font-ui-panel text-[10px] text-[#505050]">
             {phases.length} phase{phases.length !== 1 ? "s" : ""}
           </span>
-        </span>
+        </div>
       </div>
 
-      <style jsx>{`
-        @keyframes memoryScanDrift {
-          0% {
-            background-position:
-              0 0,
-              0 0;
-          }
-          100% {
-            background-position:
-              0 6px,
-              0 0;
-          }
-        }
-        @keyframes memoryBloomPulse {
-          0%,
-          100% {
-            opacity: 0.32;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-        .memory-crt-scan {
-          animation: memoryScanDrift 10s linear infinite;
-        }
-        .memory-crt-bloom {
-          animation: memoryBloomPulse 4.2s ease-in-out infinite;
-        }
-      `}</style>
+      {/* Leaderboard drawer */}
+      <LeaderboardDrawer
+        open={leaderboardOpen}
+        onClose={() => setLeaderboardOpen(false)}
+        gameId={gameId}
+        refreshKey={dataRefreshKey}
+      />
     </main>
   );
 }

@@ -17,7 +17,7 @@ export default function PhaseTimeline({ phases, currentIndex, onSelect }: Props)
 
   return (
     <div
-      className="flex gap-1 scroll-fade-x pb-1 px-5"
+      className="font-ui-phase-memory flex gap-1 scroll-fade-x pb-1 px-5"
     >
       {phases.map((phase, i) => (
         <button

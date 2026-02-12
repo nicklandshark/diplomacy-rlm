@@ -1,13 +1,8 @@
 "use client";
 
-import { RefObject, useEffect, useRef, useState } from "react";
+import { RefObject } from "react";
 import type { PhaseOrders, PhaseResults } from "@/lib/types";
-import {
-  getOrdersPanelLayoutMode,
-  toOrderResultLabel,
-  type OrdersPanelLayoutMode,
-} from "@/lib/orders-layout";
-import { buildOrderRows } from "./intel/fsb-utils";
+import { buildOrderRows, type FsbOrderStatus } from "./intel/fsb-utils";
 
 interface OrderPanelProps {
   orders: PhaseOrders | null;
@@ -18,136 +13,106 @@ interface OrderPanelProps {
   activeOrderRef?: RefObject<HTMLDivElement | null>;
 }
 
+const STATUS: Record<FsbOrderStatus, { color: string; icon: string; label: string }> = {
+  pending:  { color: "#607a68", icon: "\u2026", label: "pending" },
+  success:  { color: "#4a7c59", icon: "\u2713", label: "success" },
+  failed:   { color: "#dc143c", icon: "\u2715", label: "failed" },
+  void:     { color: "#ff9500", icon: "\u2298", label: "void" },
+  unknown:  { color: "#8a95a1", icon: "?",      label: "unknown" },
+};
+
 export function OrderPanel({ orders, results, pendingPowers, onOrderHover, revealedOrderCount = -1, activeOrderRef }: OrderPanelProps) {
   const rows = buildOrderRows(orders, results, pendingPowers);
-  const shellRef = useRef<HTMLDivElement>(null);
-  const [layoutMode, setLayoutMode] = useState<OrdersPanelLayoutMode>("wide");
-
-  useEffect(() => {
-    const host = shellRef.current;
-    if (!host || typeof ResizeObserver === "undefined") return;
-
-    const updateLayout = () => {
-      const panelWidth = host.getBoundingClientRect().width;
-      const viewportWidth = typeof window === "undefined" ? panelWidth : window.innerWidth;
-      setLayoutMode(getOrdersPanelLayoutMode(panelWidth, viewportWidth));
-    };
-
-    updateLayout();
-    const observer = new ResizeObserver(updateLayout);
-    observer.observe(host);
-    if (typeof window !== "undefined") {
-      window.addEventListener("resize", updateLayout);
-    }
-
-    return () => {
-      observer.disconnect();
-      if (typeof window !== "undefined") {
-        window.removeEventListener("resize", updateLayout);
-      }
-    };
-  }, []);
-
-  const columnTemplate =
-    layoutMode === "compact"
-      ? "56px 68px minmax(0,1fr)"
-      : layoutMode === "normal"
-      ? "62px 70px minmax(0,1fr) 112px"
-      : "68px 74px minmax(0,1fr) 96px 64px";
 
   if (rows.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-32 text-[#808080]">
-        <div className="text-2xl mb-2">—</div>
+        <div className="text-2xl mb-2">&mdash;</div>
         <div className="text-sm uppercase tracking-wider">No orders issued</div>
       </div>
     );
   }
 
   const isRevealing = revealedOrderCount >= 0;
-  const statusStyles: Record<string, { text: string; badge: string; icon: string; label: string }> = {
-    pending: { text: "text-[#4a7c59]", badge: "border-[#4a7c59]/50 bg-[#4a7c59]/15", icon: "…", label: "pending" },
-    success: { text: "text-[#4a7c59]", badge: "border-[#4a7c59]/50 bg-[#4a7c59]/10", icon: "✓", label: "success" },
-    failed: { text: "text-[#dc143c]", badge: "border-[#dc143c]/50 bg-[#dc143c]/10", icon: "✕", label: "failed" },
-    void: { text: "text-[#ff9500]", badge: "border-[#ff9500]/50 bg-[#ff9500]/10", icon: "⊘", label: "void" },
-    unknown: { text: "text-[#b7bec6]", badge: "border-[#8a95a1]/45 bg-[#8a95a1]/12", icon: "?", label: "unknown" },
-  };
 
   return (
-    <div ref={shellRef} className="p-2 text-xs font-['IBM_Plex_Mono']">
+    <div className="p-1.5">
+      {/* Table shell */}
       <div
-        className="border border-[#3a3a3a] bg-[#0f0f0f]"
+        className="border border-[#2a2a2a] bg-[#0c0c0c] overflow-hidden"
         role="table"
         aria-label="Orders table"
       >
+        {/* Header */}
         <div
-          className="grid bg-[#181818] border-b border-[#3a3a3a] text-[10px] font-bold uppercase tracking-[0.11em] text-[#808080]"
-          style={{ gridTemplateColumns: columnTemplate }}
+          className="grid items-center bg-[#151515] border-b border-[#2a2a2a] text-[9px] font-bold uppercase tracking-[0.14em] text-[#606060]"
+          style={{ gridTemplateColumns: "36px 62px 1fr 50px" }}
           role="row"
         >
-          <div className="px-2 py-1.5" role="columnheader">Power</div>
-          <div className="px-2 py-1.5" role="columnheader">Unit</div>
-          <div className="px-2 py-1.5" role="columnheader">Order</div>
-          {layoutMode !== "compact" && <div className="px-2 py-1.5" role="columnheader">Result</div>}
-          {layoutMode === "wide" && <div className="px-2 py-1.5" role="columnheader">Status</div>}
+          <div className="px-1.5 py-1" role="columnheader">Pwr</div>
+          <div className="px-1.5 py-1" role="columnheader">Unit</div>
+          <div className="px-1.5 py-1" role="columnheader">Order</div>
+          <div className="px-1 py-1 text-center" role="columnheader">Status</div>
         </div>
 
-        <div className="divide-y divide-[#2a2a2a]" role="rowgroup">
-          {rows.map((row) => {
+        {/* Rows */}
+        <div role="rowgroup">
+          {rows.map((row, i) => {
             const isActive = isRevealing && row.index === revealedOrderCount - 1;
             const isHidden = isRevealing && row.index >= revealedOrderCount;
             const isDimmed = isRevealing && row.index < revealedOrderCount - 1;
-            const statusStyle = statusStyles[row.status] ?? statusStyles.unknown;
+            const st = STATUS[row.status] ?? STATUS.unknown;
+
+            // Alternating row stripe
+            const stripe = i % 2 === 0 ? "bg-[#0c0c0c]" : "bg-[#111111]";
 
             return (
               <div
                 key={row.key}
                 ref={isActive ? activeOrderRef : undefined}
-                className={`grid ${layoutMode === "compact" ? "items-start" : "items-center"} text-[11px] leading-[1.2] transition-all duration-300 ${
-                  isActive ? "bg-[#ff9500]/15 border-l-2 border-[#ff9500]" :
-                  isHidden ? "opacity-25 text-[#666]" :
-                  isDimmed ? "opacity-55 text-[#999]" :
-                  "text-[#e0e0e0] hover:bg-[#1b1b1b]"
+                className={`grid items-center text-[10px] leading-tight transition-colors duration-200 border-b border-[#1a1a1a] last:border-b-0 ${stripe} ${
+                  isActive ? "!bg-[#ff9500]/12 border-l-2 !border-l-[#ff9500]" :
+                  isHidden ? "opacity-20" :
+                  isDimmed ? "opacity-50" :
+                  "hover:bg-[#181818]"
                 }`}
-                style={{ gridTemplateColumns: columnTemplate }}
+                style={{ gridTemplateColumns: "36px 62px 1fr 50px" }}
                 onMouseEnter={() => !isRevealing && onOrderHover?.(row.rawOrder)}
                 onMouseLeave={() => !isRevealing && onOrderHover?.(null)}
                 title={row.rawOrder}
                 role="row"
-                aria-label={`${row.power.slice(0, 3)} ${row.unit} ${row.order} ${statusStyle.label}`}
+                aria-label={`${row.power.slice(0, 3)} ${row.unit} ${row.order} ${st.label}`}
               >
-                <div className="px-2 py-1.5 font-semibold uppercase tracking-[0.08em] text-[#ff9500]" role="cell">{row.power.slice(0, 3)}</div>
-                <div className="px-2 py-1.5 text-[#b8b8b8]" role="cell">{row.unit}</div>
-                <div className={`px-2 py-1.5 text-[#d0d0d0] min-w-0 ${layoutMode === "compact" ? "flex flex-col items-start gap-1" : "flex items-center justify-between gap-2"}`} role="cell">
-                  <span className={`${layoutMode === "compact" ? "whitespace-normal break-words leading-[1.35]" : layoutMode === "normal" ? "whitespace-normal break-words leading-[1.25]" : "truncate"}`}>{row.order}</span>
-                  {layoutMode === "compact" && (
-                    <span
-                      className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] uppercase tracking-[0.05em] font-semibold ${statusStyle.text} ${statusStyle.badge}`}
-                      title={toOrderResultLabel(row.result, statusStyle.label)}
-                    >
-                      <span aria-hidden="true">{statusStyle.icon}</span>
-                      <span>{toOrderResultLabel(row.result, statusStyle.label)}</span>
-                    </span>
-                  )}
+                {/* Power — 3-letter abbrev */}
+                <div className="px-1.5 py-[5px] font-bold uppercase tracking-[0.06em] text-[#ff9500] truncate" role="cell">
+                  {row.power.slice(0, 3)}
                 </div>
-                {layoutMode !== "compact" && (
-                  <div className={`px-2 py-1.5 ${statusStyle.text} ${layoutMode === "normal" ? "whitespace-normal break-words leading-[1.25]" : ""}`} role="cell">
-                    {layoutMode === "normal" ? toOrderResultLabel(row.result, statusStyle.label) : row.result}
-                  </div>
-                )}
-                {layoutMode === "wide" && (
-                  <div className="px-2 py-1.5 flex justify-center" role="cell">
-                    <span
-                      className={`inline-flex h-6 w-8 items-center justify-center rounded border text-[13px] font-semibold ${statusStyle.text} ${statusStyle.badge}`}
-                      title={statusStyle.label}
-                      aria-label={statusStyle.label}
-                      aria-hidden="true"
-                    >
-                      {statusStyle.icon}
-                    </span>
-                  </div>
-                )}
-                {layoutMode === "compact" && <span className="sr-only">{toOrderResultLabel(row.result, statusStyle.label)}</span>}
+
+                {/* Unit — e.g. "A PAR" */}
+                <div className="px-1.5 py-[5px] text-[#999] truncate" role="cell">
+                  {row.unit}
+                </div>
+
+                {/* Order — e.g. "MOVE BUR" */}
+                <div className="px-1.5 py-[5px] text-[#d0d0d0] truncate min-w-0" role="cell">
+                  {row.order}
+                </div>
+
+                {/* Status icon */}
+                <div className="flex justify-center py-[5px]" role="cell">
+                  <span
+                    className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-sm text-[11px] font-bold"
+                    style={{
+                      color: st.color,
+                      backgroundColor: st.color + "18",
+                      border: `1px solid ${st.color}44`,
+                    }}
+                    title={st.label}
+                    aria-label={st.label}
+                  >
+                    {st.icon}
+                  </span>
+                </div>
               </div>
             );
           })}

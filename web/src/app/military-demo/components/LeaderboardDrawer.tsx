@@ -51,13 +51,13 @@ const GitHubIcon = ({ size = 18, color = "#c3ae88" }: { size?: number; color?: s
 
 /* ─── Split-Flap Digit (warm amber palette) ─── */
 function FlapDigit({ value, delay = 0 }: { value: number; delay?: number }) {
-  const [displayed, setDisplayed] = useState(value);
+  const [displayed, setDisplayed] = useState(() => Math.floor(Math.random() * 10));
   const [flipping, setFlipping] = useState(false);
-  const prevRef = useRef(value);
+  const lastTarget = useRef<number | null>(null);
 
   useEffect(() => {
-    if (value === prevRef.current) return;
-    prevRef.current = value;
+    if (lastTarget.current === value) return;
+    lastTarget.current = value;
     const timer = setTimeout(() => {
       setFlipping(true);
       const mid = setTimeout(() => setDisplayed(value), 200);
@@ -123,18 +123,109 @@ function FlapNumber({ value, digits = 4, baseDelay = 0 }: { value: number; digit
   );
 }
 
-/* ─── Record badge (W-D-L) ─── */
-function RecordBadge({ wins, draws, losses }: { wins: number; draws: number; losses: number }) {
+/* ─── Compact Split-Flap Cell (smaller, for Record/Games/Text columns) ─── */
+const RANDOM_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+function CompactFlap({ char, color = "#ff9500", delay = 0, micro = false }: { char: string; color?: string; delay?: number; micro?: boolean }) {
+  const [displayed, setDisplayed] = useState(() => RANDOM_CHARS[Math.floor(Math.random() * RANDOM_CHARS.length)]);
+  const [flipping, setFlipping] = useState(false);
+  const lastTarget = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (lastTarget.current === char) return;
+    lastTarget.current = char;
+    const timer = setTimeout(() => {
+      setFlipping(true);
+      const mid = setTimeout(() => setDisplayed(char), 150);
+      const end = setTimeout(() => setFlipping(false), 300);
+      return () => { clearTimeout(mid); clearTimeout(end); };
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [char, delay]);
+
+  const w = micro ? 11 : 16;
+  const h = micro ? 16 : 22;
+  const font = micro ? 9 : 13;
+
+  return (
+    <div
+      style={{
+        width: w,
+        height: h,
+        position: "relative",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        margin: micro ? "0 0.25px" : "0 0.5px",
+        borderRadius: micro ? 1 : 2,
+        overflow: "hidden",
+        background: "linear-gradient(180deg, #1a1a1a 0%, #111111 48%, #0c0c0c 52%, #141414 100%)",
+        boxShadow: micro
+          ? "inset 0 1px 1px rgba(0,0,0,0.8)"
+          : "inset 0 1px 2px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.04)",
+        border: "1px solid #0a0a0a",
+      }}
+    >
+      <span
+        style={{
+          fontFamily: "var(--font-ui-activity, 'Courier New', monospace)",
+          fontSize: font,
+          fontWeight: 800,
+          color,
+          textShadow: micro ? "none" : `0 0 6px ${color}66`,
+          lineHeight: 1,
+          userSelect: "none",
+          transform: flipping ? "scaleY(0.7)" : "scaleY(1)",
+          opacity: flipping ? 0.4 : 1,
+          transition: "transform 0.15s ease-in-out, opacity 0.15s ease-in-out",
+          textTransform: "uppercase",
+        }}
+      >
+        {displayed}
+      </span>
+      {/* Center split line */}
+      <div style={{ position: "absolute", left: 0, right: 0, top: "50%", height: 1, background: "rgba(0,0,0,0.8)", zIndex: 2 }} />
+    </div>
+  );
+}
+
+/* ─── Record badge (W-D-L) with compact flap digits ─── */
+function RecordBadge({ wins, draws, losses, delay = 0 }: { wins: number; draws: number; losses: number; delay?: number }) {
   const total = wins + draws + losses;
   if (total === 0) return <span className="text-[10px] text-[#404040] font-mono">&mdash;</span>;
+
+  const renderStat = (value: number, label: string, color: string, baseDelay: number) => {
+    const chars = String(value).split("");
+    return (
+      <div className="inline-flex items-center">
+        {chars.map((ch, i) => (
+          <CompactFlap key={i} char={ch} color={color} delay={baseDelay + i * 60} />
+        ))}
+        <span className="text-[7px] font-bold ml-[2px] uppercase" style={{ color, opacity: 0.7 }}>{label}</span>
+      </div>
+    );
+  };
+
   return (
-    <span className="text-[10px] font-mono tracking-wide">
-      <span style={{ color: "#d4a85f" }}>{wins}W</span>
-      <span className="text-[#404040] mx-0.5">/</span>
-      <span style={{ color: "#8a8a80" }}>{draws}D</span>
-      <span className="text-[#404040] mx-0.5">/</span>
-      <span style={{ color: "#d46866" }}>{losses}L</span>
-    </span>
+    <div className="inline-flex items-center gap-[3px]">
+      {renderStat(wins, "W", "#d4a85f", delay)}
+      {renderStat(draws, "D", "#8a8a80", delay + 120)}
+      {renderStat(losses, "L", "#d46866", delay + 240)}
+    </div>
+  );
+}
+
+/* ─── Flipboard text — renders each char as a micro flap cell ─── */
+function FlapText({ text, color = "#c3ae88", delay = 0 }: { text: string; color?: string; delay?: number }) {
+  return (
+    <div className="inline-flex items-center flex-wrap gap-y-[2px]">
+      {text.split("").map((ch, i) =>
+        ch === " " ? (
+          <span key={i} style={{ width: 4, flexShrink: 0 }} />
+        ) : (
+          <CompactFlap key={i} char={ch} color={color} delay={delay + i * 30} micro />
+        )
+      )}
+    </div>
   );
 }
 
@@ -158,6 +249,13 @@ interface LeaderboardDrawerProps {
 export function LeaderboardDrawer({ open, onClose, gameId, refreshKey = 0 }: LeaderboardDrawerProps) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mountKey, setMountKey] = useState(0);
+
+  // Increment mountKey each time drawer opens so React remounts rows,
+  // triggering fresh flipboard random-start animations.
+  useEffect(() => {
+    if (open) setMountKey(k => k + 1);
+  }, [open]);
 
   // Prefer game-scoped standings; fallback to global rankings if the scoped fetch fails.
   useEffect(() => {
@@ -193,8 +291,6 @@ export function LeaderboardDrawer({ open, onClose, gameId, refreshKey = 0 }: Lea
   const handleBackdropClick = useCallback((e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
   }, [onClose]);
-
-  const isGameScoped = Boolean(data?.gameId);
 
   return (
     <>
@@ -310,17 +406,13 @@ export function LeaderboardDrawer({ open, onClose, gameId, refreshKey = 0 }: Lea
                 </button>
               </div>
 
-              {/* Subtitle */}
-              <div className="mt-2 font-ui-panel text-[9px] uppercase tracking-[0.25em] text-[#8f8776]">
-                {isGameScoped ? `Game Rankings${data?.phase ? ` — ${data.phase}` : ""}` : "Global Rankings — All Games"}
-              </div>
             </div>
 
             {/* ─── Column Headers ─── */}
             <div
               className="flex-shrink-0 grid items-center px-3 py-2 font-ui-panel text-[9px] font-bold uppercase tracking-[0.15em] text-[#606060]"
               style={{
-                gridTemplateColumns: "32px 1fr 110px 80px 60px",
+                gridTemplateColumns: "32px 1fr 108px 104px 56px",
                 background: "linear-gradient(180deg, #1a1a1a 0%, #151515 100%)",
                 borderBottom: "1px solid #222222",
               }}
@@ -333,13 +425,13 @@ export function LeaderboardDrawer({ open, onClose, gameId, refreshKey = 0 }: Lea
             </div>
 
             {/* ─── Scrollable Rows ─── */}
-            <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="flex-1 overflow-y-auto min-h-0" key={mountKey}>
               {loading && !data && (
                 <div className="flex items-center justify-center h-32 text-[#606060] text-sm">Loading...</div>
               )}
 
               {data?.entries.map((entry, i) => (
-                <ModelRow key={`${entry.agentKey}-${entry.power || i}`} entry={entry} index={i} animDelay={i * 100} />
+                <ModelRow key={`${entry.agentKey}-${entry.power || i}`} entry={entry} index={i} />
               ))}
 
               {data && data.entries.length === 0 && (
@@ -411,19 +503,14 @@ export function LeaderboardDrawer({ open, onClose, gameId, refreshKey = 0 }: Lea
           from { opacity: 1; }
           to { opacity: 0; }
         }
-        @keyframes rowSlideIn {
-          from { opacity: 0; transform: translateX(30px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
       `}</style>
     </>
   );
 }
 
 /* ─── Individual Model Row ─── */
-function ModelRow({ entry, index, animDelay }: { entry: LeaderboardEntry; index: number; animDelay: number }) {
+function ModelRow({ entry, index }: { entry: LeaderboardEntry; index: number }) {
   const { display, short } = formatModelName(entry.model);
-  const stripe = index % 2 === 0 ? "bg-[#0c0c0c]" : "bg-[#111111]";
   const isTop3 = index < 3;
 
   // Medal colors for top 3
@@ -434,9 +521,8 @@ function ModelRow({ entry, index, animDelay }: { entry: LeaderboardEntry; index:
     <div
       className="grid items-center px-3 py-2.5 border-b transition-colors hover:bg-[#1a1a1a]"
       style={{
-        gridTemplateColumns: "32px 1fr 110px 80px 60px",
+        gridTemplateColumns: "32px 1fr 108px 104px 56px",
         borderColor: "#1a1a1a",
-        animation: `rowSlideIn 0.4s ease-out ${animDelay}ms both`,
       }}
       role="row"
       aria-label={`Rank ${entry.rank}, ${entry.model}, ELO ${entry.elo ?? "unrated"}`}
@@ -449,17 +535,15 @@ function ModelRow({ entry, index, animDelay }: { entry: LeaderboardEntry; index:
         {entry.rank}
       </div>
 
-      {/* Model name + backend */}
-      <div className="min-w-0 pl-1">
-        <div
-          className="font-ui-panel text-[12px] font-bold tracking-[0.04em] truncate"
-          style={{ color: isTop3 ? "#d8c183" : "#c3ae88" }}
-          title={entry.agentKey}
-        >
-          {display}
-        </div>
+      {/* Model name — flipboard text */}
+      <div className="min-w-0 pl-1 overflow-hidden" title={entry.agentKey}>
+        <FlapText
+          text={display}
+          color={isTop3 ? "#d8c183" : "#c3ae88"}
+          delay={80}
+        />
         {short && (
-          <div className="text-[9px] text-[#606060] font-ui-panel truncate">
+          <div className="text-[8px] text-[#505050] font-ui-panel truncate mt-0.5">
             {short}
           </div>
         )}
@@ -468,20 +552,22 @@ function ModelRow({ entry, index, animDelay }: { entry: LeaderboardEntry; index:
       {/* ELO flap digits */}
       <div className="flex items-center justify-center">
         {entry.elo !== null ? (
-          <FlapNumber value={entry.elo} digits={4} baseDelay={animDelay + 200} />
+          <FlapNumber value={entry.elo} digits={4} baseDelay={200} />
         ) : (
           <span className="text-[11px] text-[#3a3a3a] font-mono tracking-wider">----</span>
         )}
       </div>
 
-      {/* W/D/L record */}
+      {/* W/D/L record — compact flap digits */}
       <div className="flex items-center justify-center">
-        <RecordBadge wins={entry.record.wins} draws={entry.record.draws} losses={entry.record.losses} />
+        <RecordBadge wins={entry.record.wins} draws={entry.record.draws} losses={entry.record.losses} delay={300} />
       </div>
 
-      {/* Games played */}
-      <div className="text-center font-mono text-[12px] text-[#808080]">
-        {entry.eloGames}
+      {/* Games played — compact flap digits */}
+      <div className="flex items-center justify-center">
+        {String(entry.eloGames).split("").map((ch, i) => (
+          <CompactFlap key={i} char={ch} color="#808080" delay={500 + i * 60} />
+        ))}
       </div>
     </div>
   );

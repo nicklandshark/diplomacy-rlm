@@ -508,11 +508,25 @@ def main(argv: Sequence[str] | None = None) -> None:
         with open(pid_file, "w") as f:
             f.write(str(os.getpid()))
         # Write backend/model metadata so the web viewer can use the same provider
+        # and downstream rating systems can resolve per-power agent identities.
+        power_meta = {}
+        for power in config.powers:
+            backend = config.backend_for(power)
+            kwargs = config.backend_kwargs_for(power)
+            power_meta[power] = {
+                "backend": backend,
+                "model": str(kwargs.get("model_name", "")),
+            }
+        root_model = str(
+            config.backend_kwargs.get("model_name", "")
+            or (config.backend_kwargs_for(config.powers[0]).get("model_name", "") if config.powers else "")
+        )
         meta_file = os.path.join(game_dir_abs, ".game_meta.json")
         with open(meta_file, "w") as f:
             json.dump({
                 "backend": config.backend,
-                "model": str(config.backend_kwargs.get("model_name", "")),
+                "model": root_model,
+                "powers": power_meta,
             }, f)
 
         if args.serve_web:

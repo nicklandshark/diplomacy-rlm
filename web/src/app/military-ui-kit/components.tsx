@@ -43,9 +43,9 @@ export const TacticalPanel = ({ children, title, verticalTitle = false, classNam
 
     {/* Inset title well - horizontal or vertical */}
     {title && !verticalTitle && (
-      <div className="relative z-10 mx-6 sm:mx-8 mt-6 mb-3" style={{
+      <div className="relative z-10 mx-3 sm:mx-4 mt-3 mb-2" style={{
         background: "linear-gradient(180deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
-        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,149,0,0.1)",
+        boxShadow: "inset 0 2px 4px rgba(0,0,0,0.8), inset 0 -1px 2px rgba(255,255,255,0.03), 0 1px 0 rgba(255,149,0,0.1)",
         border: "2px solid #0a0a0a",
         borderRadius: "2px"
       }}>
@@ -55,7 +55,7 @@ export const TacticalPanel = ({ children, title, verticalTitle = false, classNam
         }} />
 
         {/* Title text */}
-        <div className="relative px-3 sm:px-4 py-1.5 sm:py-2 text-[#ff9500] text-xs sm:text-sm uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
+        <div className="relative px-3 py-1 text-[#ff9500] text-[11px] sm:text-xs uppercase tracking-[0.15em] sm:tracking-[0.2em] font-bold text-center" style={{
           textShadow: "0 0 8px rgba(255,149,0,0.4), 0 1px 2px rgba(0,0,0,0.8)"
         }}>
           {title}
@@ -390,38 +390,56 @@ export const ProgressBar = ({ value, label, color = "#ff9500", showPercentage = 
   </div>
 );
 
-// TacticalTabGroup - Military styled tabs
+// TacticalTabGroup - Military styled segmented control tabs
 export const TacticalTabGroup = ({ tabs, activeTab, onTabChange, badge }: {
   tabs: string[];
   activeTab: string;
   onTabChange: (tab: string) => void;
   badge?: Record<string, number>;
 }) => (
-  <div className="flex gap-1 border-b border-[#2a2a2a] mb-3">
-    {tabs.map((tab) => (
-      <button
-        key={tab}
-        onClick={() => onTabChange(tab)}
-        className={`relative flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-all border-2 border-b-0 whitespace-nowrap ${
-          activeTab === tab
-            ? "border-[#ff9500] bg-[#ff9500]/10 text-[#ff9500] z-10"
-            : "border-transparent text-[#808080] hover:text-[#e0e0e0] hover:border-[#3a3a3a]"
-        }`}
-        style={{
-          marginBottom: '-2px',
-          boxShadow: activeTab === tab
-            ? "inset 0 2px 4px rgba(0,0,0,0.4), 0 0 12px rgba(255,149,0,0.2)"
-            : "inset 0 2px 4px rgba(0,0,0,0.6)"
-        }}
-      >
-        {tab}
-        {badge && badge[tab] > 0 && activeTab !== tab && (
-          <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold bg-[#ff9500] text-[#0a0a0a] rounded-full min-w-[18px] text-center">
-            {badge[tab]}
-          </span>
-        )}
-      </button>
-    ))}
+  <div
+    className="flex mb-3 rounded-[5px] overflow-hidden"
+    style={{
+      background: "linear-gradient(180deg, #151515 0%, #111111 100%)",
+      border: "2px solid #0a0a0a",
+      boxShadow: "inset 0 2px 6px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.03)",
+    }}
+  >
+    {tabs.map((tab, i) => {
+      const isActive = activeTab === tab;
+      return (
+        <button
+          key={tab}
+          onClick={() => onTabChange(tab)}
+          className="font-ui-panel relative flex-1 py-2 text-[10px] font-bold uppercase tracking-[0.16em] transition-all whitespace-nowrap"
+          style={{
+            color: isActive ? "#ff9500" : "#606060",
+            background: isActive
+              ? "linear-gradient(180deg, #2a2518 0%, #1e1b14 100%)"
+              : "transparent",
+            textShadow: isActive ? "0 0 8px rgba(255,149,0,0.3)" : "none",
+            borderRight: i < tabs.length - 1 ? "1px solid #0a0a0a" : "none",
+            boxShadow: isActive
+              ? "inset 0 -2px 0 #ff9500, inset 0 1px 4px rgba(255,149,0,0.08)"
+              : "none",
+          }}
+        >
+          {tab}
+          {badge && badge[tab] > 0 && !isActive && (
+            <span
+              className="ml-1.5 inline-flex items-center justify-center min-w-[16px] h-[14px] px-1 text-[8px] font-bold rounded-full"
+              style={{
+                background: "#ff9500",
+                color: "#0a0a0a",
+                boxShadow: "0 0 6px rgba(255,149,0,0.4)",
+              }}
+            >
+              {badge[tab]}
+            </span>
+          )}
+        </button>
+      );
+    })}
   </div>
 );
 

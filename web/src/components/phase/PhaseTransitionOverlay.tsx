@@ -40,10 +40,10 @@ export default function PhaseTransitionOverlay({ phase }: Props) {
       }`}
     >
       <div className="bg-gray-950/80 backdrop-blur-sm rounded-lg px-6 py-3 border border-gray-700/50">
-        <div className="text-lg font-semibold text-white text-center">
+        <div className="font-ui-phase-memory text-lg font-semibold text-white text-center">
           {phaseDisplayName(displayPhase)}
         </div>
-        <div className="text-xs text-gray-400 text-center mt-0.5">
+        <div className="font-ui-phase-memory text-xs text-gray-400 text-center mt-0.5">
           {displayPhase}
         </div>
       </div>

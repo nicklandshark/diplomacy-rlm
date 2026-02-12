@@ -152,7 +152,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
   const inProgress = isLive;
 
   return (
-    <div className="p-3 text-sm space-y-4">
+    <div className="font-ui-orders p-3 text-sm space-y-4">
       {/* Result header */}
       <div className="text-center">
         {winner ? (
@@ -197,7 +197,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
                     style={{ width: `${barWidth}%`, backgroundColor: color }}
                   />
                 </div>
-                <span className={`text-xs w-6 text-right font-mono ${isEliminated ? "text-gray-600" : "text-gray-300"}`}>
+                <span className={`text-xs w-6 text-right ${isEliminated ? "text-gray-600" : "text-gray-300"}`}>
                   {s.scs}
                 </span>
               </div>
@@ -306,7 +306,7 @@ export default function GameSummary({ gameId, currentPhase, refreshKey = 0, isLi
                       className="h-full rounded transition-all duration-500"
                       style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }}
                     />
-                    <span className="absolute inset-0 flex items-center px-1.5 text-[10px] font-mono text-gray-200">
+                    <span className="absolute inset-0 flex items-center px-1.5 text-[10px] text-gray-200">
                       {power.slice(0, 3)} {pct}%
                     </span>
                   </div>

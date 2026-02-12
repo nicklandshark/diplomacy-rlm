@@ -19,11 +19,13 @@ import {
 } from "./activity/teletype-utils";
 import ConnectionStatusBadge from "./activity/ConnectionStatusBadge";
 import { getConnectionIndicator } from "./activity/connection-indicator";
+import CRTScreenOverlay from "./CRTScreenOverlay";
 
 interface Props {
   id?: string;
   events: LiveEvent[];
   connected: boolean;
+  connectionError?: string | null;
   gameLog?: GameLogEvent[];
   livePhase?: string | null;
   liveStep?: string | null;
@@ -117,6 +119,7 @@ export function ActivityFeed({
   id,
   events,
   connected,
+  connectionError,
   gameLog,
   livePhase,
   liveStep,
@@ -306,7 +309,7 @@ export function ActivityFeed({
       return true;
     });
   }, [printedLines]);
-  const indicator = getConnectionIndicator(connected, queueActive, liveStep);
+  const indicator = getConnectionIndicator(connected, queueActive, liveStep, connectionError);
 
   const renderTokens = (tokens: TeletypeToken[] | undefined, fallbackText: string, maxChars = Number.POSITIVE_INFINITY) => {
     if (!tokens || tokens.length === 0) {
@@ -365,47 +368,7 @@ export function ActivityFeed({
 
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <div className="absolute inset-0 bg-[#02070b]" />
-        <div
-          className="pointer-events-none absolute inset-0 crt-activity-scan"
-          style={{
-            opacity: 0.92,
-            background:
-              "repeating-linear-gradient(0deg, rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1px, rgba(0,0,0,0.58) 1px, rgba(0,0,0,0.58) 3px), radial-gradient(ellipse at center, rgba(224,171,84,0.2) 0%, rgba(224,171,84,0.07) 48%, transparent 74%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 mix-blend-screen"
-          style={{
-            opacity: 0.52,
-            background:
-              "linear-gradient(90deg, rgba(239,209,144,0.2) 0%, transparent 30%, transparent 70%, rgba(255,241,208,0.18) 100%)",
-            transform: "translateX(-1px)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 mix-blend-screen"
-          style={{
-            opacity: 0.38,
-            background:
-              "linear-gradient(90deg, rgba(221,170,86,0.2) 0%, transparent 34%, transparent 66%, rgba(241,226,194,0.16) 100%)",
-            transform: "translateX(1px)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0 crt-activity-bloom"
-          style={{
-            opacity: 0.42,
-            background:
-              "radial-gradient(ellipse at 50% 42%, rgba(239,206,140,0.22) 0%, rgba(194,140,62,0.08) 50%, transparent 82%)",
-          }}
-        />
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: "radial-gradient(ellipse at center, transparent 46%, rgba(0,0,0,0.7) 100%)",
-          }}
-        />
-        <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_72px_rgba(0,0,0,0.78)]" />
+        <CRTScreenOverlay color="amber" />
 
         <div className="relative z-10 h-full overflow-auto text-xs" role="log" aria-live="polite" aria-relevant="additions text">
           {connected && powerStatus && Object.keys(powerStatus).length > 0 && (
@@ -458,9 +421,14 @@ export function ActivityFeed({
               <div className="text-[11px] uppercase tracking-[0.2em]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Listening for dispatches</div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-32 text-[#7d8792]">
+            <div className="flex flex-col items-center justify-center h-32 px-3 text-[#7d8792]">
               <div className="text-2xl mb-2">◈</div>
               <div className="text-sm uppercase tracking-wider" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Feed Offline</div>
+              {connectionError && (
+                <div className="mt-1 text-[10px] leading-[1.3] text-[#bf9d9d] text-center max-w-[30ch]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {connectionError}
+                </div>
+              )}
             </div>
           )}
 
@@ -520,35 +488,6 @@ export function ActivityFeed({
         })}
       </div>
 
-      <style jsx>{`
-        @keyframes activityScanDrift {
-          0% {
-            background-position:
-              0 0,
-              0 0;
-          }
-          100% {
-            background-position:
-              0 6px,
-              0 0;
-          }
-        }
-        @keyframes activityBloomPulse {
-          0%,
-          100% {
-            opacity: 0.34;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-        .crt-activity-scan {
-          animation: activityScanDrift 9s linear infinite;
-        }
-        .crt-activity-bloom {
-          animation: activityBloomPulse 3.8s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 }

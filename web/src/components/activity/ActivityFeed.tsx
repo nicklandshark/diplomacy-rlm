@@ -7,6 +7,11 @@ import ActivityItem, { shouldRender } from "./ActivityItem";
 import { phaseDisplayName, POWER_DISPLAY_COLORS } from "@/lib/constants";
 import { powerFlag } from "@/lib/power-flags";
 import PowerBadge from "@/components/power/PowerBadge";
+import ConnectionStoplight from "./ConnectionStoplight";
+import {
+  getConnectionDisplayState,
+  resolveConnectionSignal,
+} from "./connection-status";
 
 const STATUS_CHIP_CONFIG: Record<PowerStatus, { dot: string; animate: boolean; icon?: string }> = {
   idle: { dot: "", animate: false },
@@ -20,6 +25,7 @@ const STATUS_CHIP_CONFIG: Record<PowerStatus, { dot: string; animate: boolean; i
 interface Props {
   events: LiveEvent[];
   connected: boolean;
+  connectionError?: string | null;
   gameLog?: GameLogEvent[];
   livePhase?: string | null;
   liveStep?: string | null;
@@ -102,7 +108,7 @@ const STATUS_LABELS: Record<PowerStatus, { text: string; color: string }> = {
   timeout: { text: "Timed out", color: "text-orange-400" },
 };
 
-export default function ActivityFeed({ events, connected, gameLog, livePhase, liveStep, phaseCount, powerStatus, activePowers, selectedPower, onSelectPower, units, centers }: Props) {
+export default function ActivityFeed({ events, connected, connectionError, gameLog, livePhase, liveStep, phaseCount, powerStatus, activePowers, selectedPower, onSelectPower, units, centers }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [filterPower, setFilterPower] = useState<string | null>(null);
 
@@ -121,34 +127,33 @@ export default function ActivityFeed({ events, connected, gameLog, livePhase, li
 
   const hasLiveContent = connected || rendered.length > 0;
   const logEntries = gameLog || [];
+  const connectionSignal = resolveConnectionSignal(connected, connectionError);
+  const connectionDisplay = getConnectionDisplayState(connectionSignal);
+  const phaseSummary = phaseCount != null && phaseCount > 0
+    ? `${phaseCount} phase${phaseCount !== 1 ? "s" : ""}`
+    : "no phases";
+  const phaseChipLabel = connected && livePhase ? livePhase : phaseSummary;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [rendered.length, logEntries.length]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="font-ui-activity flex flex-col h-full">
       <div className="flex items-center gap-1.5 px-2 py-1 border-b border-gray-800">
-        <span className="text-xs text-gray-400 flex-shrink-0">Activity</span>
-        {connected ? (
-          <>
-            <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-            {livePhase && (
-              <span className="text-[11px] text-green-400 font-medium flex-shrink-0">{livePhase}</span>
-            )}
-          </>
-        ) : (
-          <>
-            <span className="w-2 h-2 rounded-full bg-gray-600 flex-shrink-0" />
-            <span className="text-[11px] text-gray-500 flex-shrink-0">
-              {phaseCount != null && phaseCount > 0
-                ? `${phaseCount} phase${phaseCount !== 1 ? "s" : ""}`
-                : "offline"}
-            </span>
-          </>
+        <span className="font-ui-title tracking-wide text-xs text-gray-400 flex-shrink-0">Activity</span>
+        <span className="text-[10px] text-gray-500 uppercase tracking-[0.14em] flex-shrink-0">
+          {phaseChipLabel}
+        </span>
+        <ConnectionStoplight display={connectionDisplay} />
+        <span className={`text-[10px] font-medium tracking-[0.1em] uppercase flex-shrink-0 ${connectionDisplay.statusToneClass}`}>
+          {connectionDisplay.feedLabel}
+        </span>
+        {connected && liveStep && (
+          <span className="text-[10px] text-gray-500 hidden xl:inline">{liveStep}</span>
         )}
         {/* Power chips + activity filter */}
-        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0 min-w-0 overflow-hidden">
           {activePowers && activePowers.length > 0 ? (
             activePowers.map((power) => {
               const isActive = selectedPower === power;

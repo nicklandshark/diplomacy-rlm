@@ -11,13 +11,14 @@ export function getConnectionIndicator(
   connected: boolean,
   queueActive: boolean,
   liveStep?: string | null,
+  connectionError?: string | null,
 ): ConnectionIndicatorState {
   if (!connected) {
     return {
       activeLamp: "red",
       stateChip: "LINK LOST",
       stateChipClass: "border-[#d48e8e]/45 bg-[#8a4a4a]/18 text-[#e7caca]",
-      statusDetail: "Offline feed",
+      statusDetail: connectionError || "Offline feed",
     };
   }
 

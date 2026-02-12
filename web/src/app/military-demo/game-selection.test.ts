@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest";
 import { firstQueryValue, resolveMilitaryDemoGame } from "./game-selection";
 
 describe("military-demo game selection", () => {
+  const baseFields = {
+    meta: null,
+    gameOver: false,
+    finalStandings: [],
+    finalCenters: {},
+    finalInfluence: {},
+  };
+
   const games = [
     {
       id: "game1",
@@ -10,6 +18,7 @@ describe("military-demo game selection", () => {
       lastPhase: "F1901M",
       powers: ["FRANCE", "GERMANY"],
       hasLog: true,
+      ...baseFields,
     },
     {
       id: "game2",
@@ -18,6 +27,7 @@ describe("military-demo game selection", () => {
       lastPhase: "S1902M",
       powers: ["AUSTRIA", "FRANCE", "RUSSIA"],
       hasLog: true,
+      ...baseFields,
     },
   ];
 

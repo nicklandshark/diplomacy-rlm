@@ -59,7 +59,7 @@ export default function MessageList({ messages, liveMessages }: Props) {
   const singleThread = threads.length === 1;
 
   return (
-    <div className="flex flex-col">
+    <div className="font-ui-orders flex flex-col">
       {threads.map(thread => {
         const isExpanded = singleThread || expandedThread === thread.key;
         const [p1, p2] = thread.powers;

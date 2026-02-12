@@ -15,7 +15,8 @@ interface MessagePanelProps {
 export function MessagePanel({ messages, liveMessages, connected = false, livePhase }: MessagePanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
-  const [expandedThread, setExpandedThread] = useState<string | null>(null);
+  // Track collapsed threads — threads are open by default
+  const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set());
 
   // Filter messages - ensure messages is an array
   const messageArray = Array.isArray(messages) ? messages : [];
@@ -25,7 +26,6 @@ export function MessagePanel({ messages, liveMessages, connected = false, livePh
   }, [messageArray, liveMessages]);
 
   const hasMessages = threads.length > 0;
-  const singleThread = threads.length === 1;
   const statusStyles = {
     live: "text-[#4a7c59] border-[#4a7c59]/50 bg-[#4a7c59]/12",
     archive: "text-[#808080] border-[#808080]/40 bg-[#808080]/10",
@@ -56,7 +56,7 @@ export function MessagePanel({ messages, liveMessages, connected = false, livePh
             </div>
 
             {threads.map((thread) => {
-              const isExpanded = singleThread || expandedThread === thread.key;
+              const isExpanded = !collapsedThreads.has(thread.key);
               const [p1, p2] = thread.powers;
               const rowStatus = statusStyles[thread.status];
               const detailsId = `${panelId}-${thread.key.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
@@ -64,7 +64,12 @@ export function MessagePanel({ messages, liveMessages, connected = false, livePh
               return (
                 <div key={thread.key} className="border-b border-[#2a2a2a] last:border-b-0" role="rowgroup">
                   <button
-                    onClick={() => setExpandedThread(isExpanded && !singleThread ? null : thread.key)}
+                    onClick={() => setCollapsedThreads((prev) => {
+                      const next = new Set(prev);
+                      if (isExpanded) next.add(thread.key);
+                      else next.delete(thread.key);
+                      return next;
+                    })}
                     className="w-full grid grid-cols-[1.8fr_0.6fr_1.8fr_0.8fr] items-center text-left hover:bg-[#1b1b1b] transition-colors"
                     role="row"
                     aria-expanded={isExpanded}
