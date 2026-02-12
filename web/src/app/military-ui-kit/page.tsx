@@ -1529,8 +1529,8 @@ export default function MilitaryUIKitPage() {
             Military Command UI Kit • Dark Industrial Design System
           </div>
           <div className="flex gap-8 justify-center text-xs">
-            <a href="/ra3-assets" className="text-[#ff9500] hover:text-[#ffaa20]">
-              RA3 Assets →
+            <a href="/military-demo" className="text-[#ff9500] hover:text-[#ffaa20]">
+              Open Military Demo →
             </a>
             <a href="/" className="text-[#808080] hover:text-[#e0e0e0]">
               ← Diplomacy Viewer
