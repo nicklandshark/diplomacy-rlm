@@ -1,0 +1,26 @@
+{
+  "1770409664138940": {
+    "message": "I'm open to discussing our mutual interests and avoiding conflict. What's your proposal?",
+    "phase": "S1903M",
+    "recipient": "FRANCE",
+    "sender": "AUSTRIA"
+  },
+  "1770409664139042": {
+    "message": "Greetings France, I am Austria. Let us discuss our mutual interests and explore ways to avoid conflict. What are your thoughts on the current state of the board?",
+    "phase": "S1903M",
+    "recipient": "FRANCE",
+    "sender": "AUSTRIA"
+  },
+  "1770409717579804": {
+    "message": "Dear Austria, I propose we discuss mutual interests and explore ways to avoid conflict between our nations. We can start by identifying areas of common ground such as trade, environmental protection, or cultural exchange. Let's schedule a bilateral talk to further discuss these opportunities.",
+    "phase": "S1903M",
+    "recipient": "AUSTRIA",
+    "sender": "FRANCE"
+  },
+  "1770409717579945": {
+    "message": "Hello, I am FRANCE. I would like to discuss our mutual interests and explore ways to avoid conflict.",
+    "phase": "S1903M",
+    "recipient": "AUSTRIA",
+    "sender": "FRANCE"
+  }
+}

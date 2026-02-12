@@ -2,8 +2,205 @@
 @plugin "@tailwindcss/typography";
 @import "../styles/map-colors.css";
 
+@font-face {
+  font-family: "MD System Trial";
+  src: url("/fonts/web/MDSystemTrial-Regular.woff2") format("woff2"),
+       url("/fonts/web/MDSystemTrial-Regular.woff") format("woff"),
+       url("/fonts/otf/MDSystemTrial-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MD System Trial";
+  src: url("/fonts/web/MDSystemTrial-Medium.woff2") format("woff2"),
+       url("/fonts/web/MDSystemTrial-Medium.woff") format("woff"),
+       url("/fonts/otf/MDSystemTrial-Medium.otf") format("opentype");
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MD System Trial";
+  src: url("/fonts/web/MDSystemTrial-Bold.woff2") format("woff2"),
+       url("/fonts/web/MDSystemTrial-Bold.woff") format("woff"),
+       url("/fonts/otf/MDSystemTrial-Bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MD System Condensed Trial";
+  src: url("/fonts/web/MDSystemCondensedTrial-Regular.woff2") format("woff2"),
+       url("/fonts/web/MDSystemCondensedTrial-Regular.woff") format("woff"),
+       url("/fonts/otf/MDSystemCondensedTrial-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MD System Condensed Trial";
+  src: url("/fonts/web/MDSystemCondensedTrial-Semibold.woff2") format("woff2"),
+       url("/fonts/web/MDSystemCondensedTrial-Semibold.woff") format("woff"),
+       url("/fonts/otf/MDSystemCondensedTrial-Semibold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "MD System Condensed Trial";
+  src: url("/fonts/web/MDSystemCondensedTrial-Bold.woff2") format("woff2"),
+       url("/fonts/web/MDSystemCondensedTrial-Bold.woff") format("woff"),
+       url("/fonts/otf/MDSystemCondensedTrial-Bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Pixel Square";
+  src: url("/fonts/web/GeistPixel-Square.woff2") format("woff2"),
+       url("/fonts/web/GeistPixel-Square.woff") format("woff"),
+       url("/fonts/otf/GeistPixel-Square.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Decima Mono";
+  src: url("/fonts/web/DecimaMono-Regular.woff2") format("woff2"),
+       url("/fonts/web/DecimaMono-Regular.woff") format("woff"),
+       url("/fonts/otf/DecimaMono-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Decima Mono";
+  src: url("/fonts/web/DecimaMono-Bold.woff2") format("woff2"),
+       url("/fonts/web/DecimaMono-Bold.woff") format("woff"),
+       url("/fonts/otf/DecimaMono-Bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Tanker";
+  src: url("/fonts/web/Tanker-Regular.woff2") format("woff2"),
+       url("/fonts/web/Tanker-Regular.woff") format("woff"),
+       url("/fonts/otf/Tanker-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Kawingan";
+  src: url("/fonts/web/Kawingan-Regular.woff2") format("woff2"),
+       url("/fonts/web/Kawingan-Regular.woff") format("woff"),
+       url("/fonts/otf/Kawingan-Regular.otf") format("opentype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Kawingan";
+  src: url("/fonts/web/Kawingan-Bold.woff2") format("woff2"),
+       url("/fonts/web/Kawingan-Bold.woff") format("woff"),
+       url("/fonts/otf/Kawingan-Bold.otf") format("opentype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* Compatibility aliases so existing inline styles adopt the new font stack. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("/fonts/web/GeistPixel-Square.woff2") format("woff2"),
+       url("/fonts/web/GeistPixel-Square.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/web/DecimaMono-Regular.woff2") format("woff2"),
+       url("/fonts/web/DecimaMono-Regular.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Special Elite";
+  src: url("/fonts/web/Kawingan-Regular.woff2") format("woff2"),
+       url("/fonts/web/Kawingan-Regular.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/fonts/web/Kawingan-Regular.woff2") format("woff2"),
+       url("/fonts/web/Kawingan-Regular.woff") format("woff");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+:root {
+  --font-ui-sans: "MD System Trial", system-ui, -apple-system, sans-serif;
+  --font-ui-panel: "MD System Condensed Trial", "MD System Trial", system-ui, sans-serif;
+  --font-ui-activity: "Geist Pixel Square", "SF Mono", Menlo, monospace;
+  --font-ui-orders: "Decima Mono", "SF Mono", Menlo, monospace;
+  --font-ui-title: "Tanker", "MD System Condensed Trial", sans-serif;
+  --font-ui-phase-memory: "Kawingan", "MD System Trial", serif;
+}
+
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font-ui-sans);
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-ui-activity);
+}
+
+.font-ui-sans {
+  font-family: var(--font-ui-sans);
+}
+
+.font-ui-panel {
+  font-family: var(--font-ui-panel);
+}
+
+.font-ui-activity {
+  font-family: var(--font-ui-activity);
+}
+
+.font-ui-orders {
+  font-family: var(--font-ui-orders);
+}
+
+.font-ui-title {
+  font-family: var(--font-ui-title);
+}
+
+.font-ui-phase-memory {
+  font-family: var(--font-ui-phase-memory);
 }
 
 /* Theme all scrollbars dark app-wide */
@@ -43,4 +240,47 @@ body {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Military theme utilities */
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+  &::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 2px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+}
+
+@utility text-glow-orange {
+  text-shadow: 0 0 10px rgba(255, 149, 0, 0.5), 0 0 20px rgba(255, 149, 0, 0.3);
+}
+
+@utility text-glow-green {
+  text-shadow: 0 0 10px rgba(74, 124, 89, 0.5), 0 0 20px rgba(74, 124, 89, 0.3);
+}
+
+@utility border-glow-orange {
+  box-shadow: 0 0 12px rgba(255, 149, 0, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+@utility border-glow-green {
+  box-shadow: 0 0 12px rgba(74, 124, 89, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Transition utilities */
+@utility transition-military {
+  transition-property: all;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
 }

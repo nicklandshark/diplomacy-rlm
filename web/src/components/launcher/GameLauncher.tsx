@@ -3,6 +3,8 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { POWER_DISPLAY_COLORS } from "@/lib/constants";
+import { Rivet } from "@/components/military-ui/components";
+import FlapSelect, { FlapCell } from "@/components/ui/FlapSelect";
 
 const ALL_POWERS = [
   "AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY",
@@ -16,6 +18,17 @@ const POWER_FLAGS: Record<string, string> = {
   ITALY: "\u{1F1EE}\u{1F1F9}",
   RUSSIA: "\u{1F1F7}\u{1F1FA}",
   TURKEY: "\u{1F1F9}\u{1F1F7}",
+};
+
+/** NATO-style three-letter designators for the tactical look */
+const POWER_SIGILS: Record<string, string> = {
+  AUSTRIA: "AUS",
+  ENGLAND: "ENG",
+  FRANCE: "FRA",
+  GERMANY: "GER",
+  ITALY: "ITA",
+  RUSSIA: "RUS",
+  TURKEY: "TUR",
 };
 
 const BACKENDS = [
@@ -233,45 +246,97 @@ export default function GameLauncher() {
   const canLaunch = powers.size >= 2 && !launching;
 
   return (
-    <div className="mb-10">
-      {/* Presets Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+    <div>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {PRESETS.map((preset) => (
           <button
             key={preset.key}
             onClick={() => handlePresetClick(preset)}
             disabled={launching}
-            className={`
-              relative text-left p-4 rounded-lg border transition-all duration-150
-              ${
-                selectedPreset === preset.key
-                  ? "border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/30"
-                  : "border-gray-700 bg-gray-900 hover:border-gray-500 hover:bg-gray-800/80"
-              }
-              ${launching ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-            `}
+            className="group relative min-h-[128px] text-left border-2 px-5 py-4 transition-all duration-150 overflow-hidden"
+            style={{
+              borderColor: selectedPreset === preset.key ? "#ff9500" : "#3a3a3a",
+              background: selectedPreset === preset.key
+                ? "linear-gradient(145deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)"
+                : "linear-gradient(145deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+              boxShadow: selectedPreset === preset.key
+                ? "inset 0 2px 4px rgba(0,0,0,0.6), 0 0 12px rgba(255,149,0,0.2)"
+                : "inset 0 2px 4px rgba(0,0,0,0.6)",
+              cursor: launching ? "not-allowed" : "pointer",
+              opacity: launching ? 0.5 : 1,
+            }}
           >
-            <div className="font-semibold text-sm text-gray-100">
+            {/* Card rivets */}
+            <Rivet size={5} style={{ left: "6px", top: "6px", opacity: 0.45 }} />
+            <Rivet size={5} style={{ right: "6px", top: "6px", opacity: 0.45 }} />
+            <Rivet size={5} style={{ left: "6px", bottom: "6px", opacity: 0.45 }} />
+            <Rivet size={5} style={{ right: "6px", bottom: "6px", opacity: 0.45 }} />
+
+            <div
+              className="text-[31px] leading-none font-medium uppercase tracking-[0.03em] font-ui-panel"
+              style={{
+                color: selectedPreset === preset.key ? "#ff9500" : "#e0e0e0",
+                textShadow: selectedPreset === preset.key ? "0 0 8px rgba(255,149,0,0.3)" : undefined,
+              }}
+            >
               {preset.label}
             </div>
-            <div className="text-xs text-gray-400 mt-1">
+            <div className="mt-2 text-[12px] leading-5 text-[#808080]">
               {preset.description}
             </div>
-            {selectedPreset === preset.key && preset.key !== "custom" && (
-              <div className="text-[10px] text-blue-400 mt-2 font-medium">
-                Click again to launch instantly
+            <div className="mt-1 text-[12px] leading-5 text-[#5a5a5a]">
+              {preset.key === "2player" && "Rapid bilateral setup"}
+              {preset.key === "7player" && "Standard map, full board"}
+              {preset.key === "custom" && "User defined parameters"}
+            </div>
+            <div
+              className="absolute bottom-3 right-4 text-[18px] leading-none transition-colors"
+              style={{ color: selectedPreset === preset.key ? "#ff9500" : "#3a3a3a" }}
+            >
+              {preset.key === "2player" && "A"}
+              {preset.key === "7player" && "O"}
+              {preset.key === "custom" && "H"}
+            </div>
+            {selectedPreset === preset.key && preset.key !== "custom" ? (
+              <div
+                className="mt-2 text-[10px] uppercase tracking-[0.12em] text-[#ff9500]"
+                style={{ textShadow: "0 0 6px rgba(255,149,0,0.3)" }}
+              >
+                Press again to execute
               </div>
-            )}
+            ) : null}
           </button>
         ))}
       </div>
 
-      {/* Expanded Form */}
       {showForm && (
-        <div className="border border-gray-800 rounded-lg bg-gray-900/50 p-5 space-y-5">
-          {/* Powers Selection */}
+        <div
+          className="mt-4 border-2 p-5 sm:p-6 relative"
+          style={{
+            borderColor: "#3a3a3a",
+            background: "linear-gradient(145deg, #1a1a1a 0%, #151515 50%, #1a1a1a 100%)",
+            boxShadow: "inset 0 2px 4px rgba(0,0,0,0.6)",
+          }}
+        >
+          <Rivet size={5} style={{ left: "8px", top: "8px", opacity: 0.45 }} />
+          <Rivet size={5} style={{ right: "8px", top: "8px", opacity: 0.45 }} />
+          <Rivet size={5} style={{ left: "8px", bottom: "8px", opacity: 0.45 }} />
+          <Rivet size={5} style={{ right: "8px", bottom: "8px", opacity: 0.45 }} />
+
+          <div className="mb-4 flex items-center justify-between border-b border-[#3a3a3a] pb-2">
+            <p
+              className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#ff9500]"
+              style={{ textShadow: "0 0 6px rgba(255,149,0,0.2)" }}
+            >
+              Manual Configuration
+            </p>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-[#808080]">
+              Runtime Parameters
+            </p>
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-[#808080] font-bold">
               Powers
             </label>
             <div className="flex flex-wrap gap-2">
@@ -283,143 +348,251 @@ export default function GameLauncher() {
                     key={power}
                     onClick={() => togglePower(power)}
                     disabled={launching}
-                    className={`
-                      flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
-                      border transition-all duration-100
-                      ${launching ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                    `}
-                    style={
-                      selected
-                        ? {
-                            backgroundColor: color + "20",
-                            borderColor: color + "66",
-                            color: color,
-                          }
-                        : {
-                            backgroundColor: "transparent",
-                            borderColor: "#374151",
-                            color: "#6b7280",
-                          }
-                    }
+                    className="group relative flex items-center gap-0 transition-all duration-100"
+                    style={{
+                      cursor: launching ? "not-allowed" : "pointer",
+                      opacity: launching ? 0.5 : 1,
+                    }}
                   >
-                    <span className="text-base">{POWER_FLAGS[power]}</span>
-                    <span>
-                      {power.charAt(0) + power.slice(1).toLowerCase()}
-                    </span>
-                    {selected && (
-                      <svg
-                        className="w-3.5 h-3.5 ml-0.5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                    {/* Flag + designator block */}
+                    <div
+                      className="flex items-center justify-center gap-1"
+                      style={{
+                        width: 52,
+                        height: 32,
+                        background: selected
+                          ? `linear-gradient(180deg, ${color}30 0%, ${color}15 100%)`
+                          : "linear-gradient(180deg, #1a1a1a 0%, #111111 48%, #0c0c0c 52%, #141414 100%)",
+                        borderTop: `1px solid ${selected ? color + "55" : "#222"}`,
+                        borderBottom: `1px solid ${selected ? color + "55" : "#222"}`,
+                        borderLeft: `1px solid ${selected ? color + "55" : "#222"}`,
+                        borderRight: "none",
+                        borderRadius: "2px 0 0 2px",
+                        boxShadow: selected
+                          ? `inset 0 1px 2px rgba(0,0,0,0.5), 0 0 6px ${color}22`
+                          : "inset 0 1px 2px rgba(0,0,0,0.7)",
+                      }}
+                    >
+                      <span style={{ fontSize: 13, lineHeight: 1 }}>
+                        {POWER_FLAGS[power]}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "'Courier New', 'Lucida Console', monospace",
+                          fontSize: 9,
+                          fontWeight: 900,
+                          letterSpacing: "0.04em",
+                          color: selected ? color : "#3a3a3a",
+                          textShadow: selected ? `0 0 6px ${color}88` : "none",
+                          lineHeight: 1,
+                          textTransform: "uppercase",
+                        }}
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2.5}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                    )}
+                        {POWER_SIGILS[power]}
+                      </span>
+                    </div>
+
+                    {/* Power name label */}
+                    <div
+                      className="flex items-center gap-1.5"
+                      style={{
+                        height: 32,
+                        padding: "0 10px",
+                        background: selected
+                          ? "linear-gradient(180deg, #1e1c18 0%, #17150f 48%, #12100c 52%, #161410 100%)"
+                          : "linear-gradient(180deg, #1a1a1a 0%, #111111 48%, #0c0c0c 52%, #141414 100%)",
+                        borderTop: `1px solid ${selected ? "#4a4530" : "#222"}`,
+                        borderRight: `1px solid ${selected ? "#4a4530" : "#222"}`,
+                        borderBottom: `1px solid ${selected ? "#4a4530" : "#222"}`,
+                        borderLeft: `1px solid ${selected ? "#2a2520" : "#1a1a1a"}`,
+                        borderRadius: "0 2px 2px 0",
+                        boxShadow: selected
+                          ? "inset 0 1px 2px rgba(0,0,0,0.5), 0 0 8px rgba(255,149,0,0.08)"
+                          : "inset 0 1px 2px rgba(0,0,0,0.7)",
+                      }}
+                    >
+                      {/* Tiny status dot */}
+                      <span
+                        style={{
+                          width: 5,
+                          height: 5,
+                          borderRadius: "50%",
+                          background: selected ? color : "#2a2a2a",
+                          boxShadow: selected ? `0 0 4px ${color}88, 0 0 1px ${color}` : "none",
+                          display: "inline-block",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: "'Courier New', 'Lucida Console', monospace",
+                          fontSize: 11,
+                          fontWeight: selected ? 700 : 500,
+                          letterSpacing: "0.08em",
+                          color: selected ? "#ff9500" : "#606060",
+                          textShadow: selected ? "0 0 6px rgba(255,149,0,0.4)" : "none",
+                          lineHeight: 1,
+                          textTransform: "uppercase",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {power}
+                      </span>
+                      {selected && (
+                        <span
+                          style={{
+                            fontFamily: "'Courier New', monospace",
+                            fontSize: 10,
+                            color: "#ff9500",
+                            lineHeight: 1,
+                            marginLeft: 2,
+                            opacity: 0.8,
+                          }}
+                        >
+                          &#9656;
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
             </div>
             {powers.size > 0 && powers.size < 2 && (
-              <p className="text-xs text-amber-400 mt-1.5">
+              <p className="mt-1.5 text-xs text-[#ff9500]">
                 Select at least 2 powers
               </p>
             )}
           </div>
 
-          {/* Backend, Model & Max Year Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mt-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#808080] font-bold">
                 Backend
               </label>
-              <select
+              <FlapSelect
+                options={BACKENDS}
                 value={backend}
-                onChange={(e) => {
-                  const b = e.target.value;
+                onChange={(b) => {
                   setBackend(b);
                   setModel(defaultModelForBackend(b));
                 }}
                 disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
-                           disabled:opacity-50"
-              >
-                {BACKENDS.map((b) => (
-                  <option key={b.value} value={b.value}>
-                    {b.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#808080] font-bold">
                 Model
               </label>
-              <select
+              <FlapSelect
+                options={MODELS_BY_BACKEND[backend] || []}
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(m) => setModel(m)}
                 disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
-                           disabled:opacity-50"
-              >
-                {(MODELS_BY_BACKEND[backend] || []).map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label className="mb-1.5 block text-[11px] uppercase tracking-[0.14em] text-[#808080] font-bold">
                 Max Year
               </label>
-              <input
-                type="number"
-                value={maxYear}
-                onChange={(e) =>
-                  setMaxYear(
-                    Math.min(1920, Math.max(1902, parseInt(e.target.value) || 1905))
-                  )
-                }
-                min={1902}
-                max={1920}
-                disabled={launching}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200
-                           focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
-                           disabled:opacity-50"
-              />
+              <div
+                className="w-full flex items-center rounded-[3px]"
+                style={{
+                  borderTop: "1px solid #1a1a1a",
+                  borderBottom: "1px solid #1a1a1a",
+                  borderLeft: "1px solid #1a1a1a",
+                  borderRight: "1px solid #1a1a1a",
+                  background: "linear-gradient(180deg, #1e1c18 0%, #141210 50%, #0e0d0b 100%)",
+                  boxShadow: "inset 0 2px 6px rgba(0,0,0,0.8), inset 0 -1px 0 rgba(255,255,255,0.03), 0 1px 0 rgba(255,255,255,0.04)",
+                  opacity: launching ? 0.5 : 1,
+                  padding: "5px 0 5px 8px",
+                }}
+              >
+                {/* Flipboard year digits */}
+                <div className="flex items-center flex-1 min-w-0">
+                  {String(maxYear).split("").map((digit, i) => (
+                    <FlapCell key={i} target={digit} delay={i * 30} lit />
+                  ))}
+                </div>
+
+                {/* Stepper buttons */}
+                <div
+                  className="flex flex-col flex-shrink-0 self-stretch"
+                  style={{
+                    width: 28,
+                    marginLeft: 6,
+                    borderLeft: "1px solid #1a1a1a",
+                  }}
+                >
+                  <button
+                    type="button"
+                    disabled={launching || maxYear >= 1920}
+                    onClick={() => setMaxYear((y) => Math.min(1920, y + 1))}
+                    className="flex-1 flex items-center justify-center transition-colors hover:bg-[rgba(255,149,0,0.08)] active:bg-[rgba(255,149,0,0.15)] disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      borderBottom: "1px solid #1a1a1a",
+                      color: "#ff9500",
+                    }}
+                  >
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor">
+                      <path d="M4 0 L8 5 L0 5 Z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={launching || maxYear <= 1902}
+                    onClick={() => setMaxYear((y) => Math.max(1902, y - 1))}
+                    className="flex-1 flex items-center justify-center transition-colors hover:bg-[rgba(255,149,0,0.08)] active:bg-[rgba(255,149,0,0.15)] disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{
+                      color: "#ff9500",
+                    }}
+                  >
+                    <svg width="8" height="5" viewBox="0 0 8 5" fill="currentColor">
+                      <path d="M0 0 L8 0 L4 5 Z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-2">
+            <div
+              className="mt-4 border-2 px-3 py-2 text-sm"
+              style={{
+                borderColor: "rgba(220,20,60,0.5)",
+                background: "rgba(220,20,60,0.08)",
+                color: "#dc143c",
+              }}
+            >
               {error}
             </div>
           )}
 
-          {/* Launch Button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-3 mt-5 flex-wrap">
             <button
               onClick={handleLaunch}
               disabled={!canLaunch}
-              className={`
-                px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-150
-                ${
-                  canLaunch
-                    ? "bg-blue-600 hover:bg-blue-500 text-white cursor-pointer shadow-lg shadow-blue-600/20"
-                    : "bg-gray-700 text-gray-400 cursor-not-allowed"
-                }
-              `}
+              className="relative px-6 py-2.5 font-bold uppercase tracking-[0.16em] transition-all duration-150 overflow-hidden"
+              style={{
+                fontFamily: "'Courier New', monospace",
+                fontSize: 13,
+                borderTop: `2px solid ${canLaunch ? "#4a4530" : "#2a2a2a"}`,
+                borderBottom: `2px solid ${canLaunch ? "#2a2018" : "#1a1a1a"}`,
+                borderLeft: `2px solid ${canLaunch ? "#3a3020" : "#222"}`,
+                borderRight: `2px solid ${canLaunch ? "#3a3020" : "#222"}`,
+                background: canLaunch
+                  ? "linear-gradient(180deg, #1e1c18 0%, #16140e 40%, #12100c 100%)"
+                  : "linear-gradient(180deg, #1a1a1a 0%, #141414 100%)",
+                color: canLaunch ? "#ff9500" : "#3a3a3a",
+                boxShadow: canLaunch
+                  ? "inset 0 1px 0 rgba(255,149,0,0.06), inset 0 -1px 2px rgba(0,0,0,0.4), 0 0 16px rgba(255,149,0,0.12)"
+                  : "inset 0 2px 4px rgba(0,0,0,0.6)",
+                cursor: canLaunch ? "pointer" : "not-allowed",
+                opacity: canLaunch ? 1 : 0.5,
+                textShadow: canLaunch ? "0 0 8px rgba(255,149,0,0.4)" : undefined,
+              }}
             >
               {launching ? (
                 <span className="flex items-center gap-2">
@@ -443,19 +616,79 @@ export default function GameLauncher() {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Launching...
+                  Executing
                 </span>
               ) : (
-                "Launch Game"
+                <>&#9654; Launch Sequence</>
               )}
             </button>
 
             {!launching && powers.size >= 2 && (
-              <span className="text-xs text-gray-500">
-                {powers.size} power{powers.size !== 1 ? "s" : ""} selected
-                &middot; {model || "no model"} via {BACKENDS.find((b) => b.value === backend)?.label}
-                &middot; until {maxYear}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap ml-auto">
+                {/* Power count badge */}
+                <span
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] font-bold"
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    background: "linear-gradient(180deg, #1e1c18 0%, #14120e 100%)",
+                    borderTop: "1px solid #3a3020",
+                    borderBottom: "1px solid #2a2018",
+                    borderLeft: "1px solid #302818",
+                    borderRight: "1px solid #302818",
+                    color: "#ff9500",
+                    textShadow: "0 0 6px rgba(255,149,0,0.25)",
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#ff9500", display: "inline-block", boxShadow: "0 0 4px rgba(255,149,0,0.6)" }} />
+                  {powers.size} powers
+                </span>
+                {/* Model badge */}
+                <span
+                  className="inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] font-bold"
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    background: "linear-gradient(180deg, #1e1c18 0%, #14120e 100%)",
+                    borderTop: "1px solid #3a3020",
+                    borderBottom: "1px solid #2a2018",
+                    borderLeft: "1px solid #302818",
+                    borderRight: "1px solid #302818",
+                    color: "#d8c183",
+                    textShadow: "0 0 4px rgba(216,193,131,0.15)",
+                  }}
+                >
+                  {model || "no model"}
+                </span>
+                {/* Backend badge */}
+                <span
+                  className="inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.1em]"
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    background: "linear-gradient(180deg, #1a1a1a 0%, #121212 100%)",
+                    borderTop: "1px solid #2a2a2a",
+                    borderBottom: "1px solid #1a1a1a",
+                    borderLeft: "1px solid #222",
+                    borderRight: "1px solid #222",
+                    color: "#808080",
+                  }}
+                >
+                  via {BACKENDS.find((b) => b.value === backend)?.label}
+                </span>
+                {/* Year badge */}
+                <span
+                  className="inline-flex items-center px-2.5 py-1 text-[10px] uppercase tracking-[0.1em]"
+                  style={{
+                    fontFamily: "'Courier New', monospace",
+                    background: "linear-gradient(180deg, #1a1a1a 0%, #121212 100%)",
+                    borderTop: "1px solid #2a2a2a",
+                    borderBottom: "1px solid #1a1a1a",
+                    borderLeft: "1px solid #222",
+                    borderRight: "1px solid #222",
+                    color: "#808080",
+                  }}
+                >
+                  until {maxYear}
+                </span>
+              </div>
             )}
           </div>
         </div>

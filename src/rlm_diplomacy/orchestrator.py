@@ -156,6 +156,7 @@ class Orchestrator:
                 if phase not in ("FORMING", "COMPLETED"):
                     year = int(phase[1:5])
                     if year > self.config.max_year:
+                        self._save_snapshot(phase)
                         break
 
                 phase_type = self.game.phase_type

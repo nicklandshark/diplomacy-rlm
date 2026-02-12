@@ -29,6 +29,7 @@ interface DiplomacyMapProps {
   revealedOrderCount?: number; // -1 or undefined = show all; 0+ = step-through count
   terrainConfig?: Partial<TerrainConfig>;
   showTerrain?: boolean;
+  fitMode?: "contain" | "cover";
 }
 
 function clientToSvg(
@@ -58,6 +59,7 @@ export default function DiplomacyMap({
   revealedOrderCount,
   terrainConfig,
   showTerrain = true,
+  fitMode = "contain",
 }: DiplomacyMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState(DEFAULT_VIEWBOX);
@@ -367,8 +369,8 @@ export default function DiplomacyMap({
       svg.setAttribute("viewBox", `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`);
       svg.setAttribute("width", "100%");
       svg.setAttribute("height", "100%");
-      // Stretch SVG to fill exact same pixel area as terrain canvas (eliminates sub-pixel drift)
-      svg.setAttribute("preserveAspectRatio", showTerrain && terrainReady ? "none" : "xMidYMid meet");
+      // Keep AR always; "cover" should fill and crop, "contain" should letterbox.
+      svg.setAttribute("preserveAspectRatio", fitMode === "cover" ? "xMidYMid slice" : "xMidYMid meet");
       svg.style.cursor = isPanning ? "grabbing" : "grab";
       // When terrain is ready, make SVG background transparent so WebGL canvas shows
       if (showTerrain && terrainReady) {
@@ -380,15 +382,15 @@ export default function DiplomacyMap({
         }
       }
     }
-  }, [viewBox, isPanning, showTerrain, terrainReady]);
+  }, [viewBox, isPanning, showTerrain, terrainReady, fitMode]);
 
   return (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden rounded-lg border border-gray-800 mx-auto ${showTerrain && terrainReady ? "terrain-active" : "bg-gray-900"}`}
+      className={`relative overflow-hidden rounded-lg border border-gray-800 ${showTerrain && terrainReady ? "terrain-active" : "bg-gray-900"}`}
       style={{
-        width: `min(100cqw, calc(100cqh * ${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}))`,
-        aspectRatio: `${DEFAULT_VIEWBOX.w} / ${DEFAULT_VIEWBOX.h}`,
+        width: "100%",
+        height: "100%",
       }}
       onMouseDown={handleMouseDown}
       onMouseMove={(e) => {

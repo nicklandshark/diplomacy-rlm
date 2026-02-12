@@ -1,0 +1,37 @@
+# England Strategic Memory
+
+## Phase: F1903M
+
+### My Units
+['F NWG', 'F NWY', 'A EDI']
+
+### My Centers  
+['EDI', 'LON', 'LVP']
+
+### Orders Submitted
+['F NWG - BAR', 'F NWY - STP/NC', 'A EDI - NWY VIA']
+
+### Board State
+AUSTRIA: units=['A SER', 'F ALB', 'A BUD', 'A TRI'], centers=['BUD', 'TRI', 'VIE', 'SER']
+ENGLAND: units=['F NWG', 'F NWY', 'A EDI'], centers=['EDI', 'LON', 'LVP']
+FRANCE: units=['A BUR', 'A GAS', 'F SPA/SC', 'A MAR'], centers=['BRE', 'MAR', 'PAR', 'SPA']
+GERMANY: units=['F DEN', 'A RUH', 'A BER', 'A MUN', 'A HOL'], centers=['BER', 'KIE', 'MUN', 'DEN', 'BEL']
+ITALY: units=['A NAF', 'F ADR', 'A ROM'], centers=['NAP', 'ROM', 'VEN']
+RUSSIA: units=['A GAL', 'F STP/NC', 'A UKR', 'A SEV', 'F SWE'], centers=['MOS', 'STP', 'WAR', 'RUM', 'SWE', 'NWY']
+TURKEY: units=['F BLA', 'F AEG', 'A BUL', 'A RUM', 'F CON'], centers=['ANK', 'CON', 'SMY', 'BUL', 'SEV']
+
+### Order History
+S1901M: {'AUSTRIA': ['A BUD - SER', 'A VIE - GAL', 'F TRI - ALB'], 'ENGLAND': ['F EDI - NWG', 'F LON - NTH', 'A LVP - YOR'], 'FRANCE': ['A PAR - BUR', 'F BRE - MAO', 'A MAR - SPA'], 'GERMANY': ['F KIE - DEN', 'A BER - KIE', 'A MUN - RUH'], 'ITALY': ['A VEN H', 'A ROM - APU', 'F NAP - ION'], 'RUSSIA': ['F STP/SC - BOT', 'A MOS - UKR', 'F SEV - BLA', 'A WAR - GAL'], 'TURKEY': ['A CON - BUL', 'F ANK - BLA', 'A SMY - ARM']}
+F1901M: {'AUSTRIA': ['F ALB S A SER - GRE', 'A SER S F ION - GRE', 'A VIE S A SER - BUD'], 'ENGLAND': ['F NWG - NWY', 'F NTH C A YOR - NWY'], 'FRANCE': ['A SPA - GAS'], 'GERMANY': ['F DEN H', 'A KIE S A YOR - HOL', 'A RUH S A YOR - HOL'], 'ITALY': ['A APU H', 'F ION H', 'A VEN H'], 'RUSSIA': ['F BOT - SWE', 'F SEV - RUM', 'A UKR S F SEV - RUM', 'A WAR - GAL'], 'TURKEY': ['F ANK S A BUL - CON', 'A ARM S F SEV', 'A BUL S F ION - GRE']}
+W1901A: {'AUSTRIA': ['A BUD B'], 'ENGLAND': ['F EDI B', 'F LON B', 'A LVP B'], 'FRANCE': [], 'GERMANY': ['A BER B'], 'ITALY': [], 'RUSSIA': ['F STP/NC B', 'A MOS B'], 'TURKEY': ['F SMY B']}
+S1902M: {'AUSTRIA': ['A VIE H', 'A SER H', 'F ALB H', 'A BUD H'], 'ENGLAND': ['A YOR - NWY VIA', 'F NTH - EDI', 'F EDI S F NTH - YOR', 'F NWY - SKA'], 'FRANCE': ['A BUR S A RUH', 'A GAS S F MAO - SPA', 'F MAO - SPA/SC'], 'GERMANY': ['A BER - MUN', 'F DEN - SKA', 'A KIE S A BER - MUN', 'A RUH - HOL'], 'ITALY': ['A VEN - TRI', 'F ION C A APU - TUN', 'A APU - TUN VIA'], 'RUSSIA': ['A GAL S F RUM', 'A MOS S A UKR - SEV', 'F RUM H', 'F STP/NC S F SWE - NWY', 'F SWE - NWY', 'A UKR - SEV'], 'TURKEY': ['F ANK - BLA', 'A ARM - SEV', 'A BUL - GRE', 'F SMY H']}
+S1902R: {'AUSTRIA': [], 'ENGLAND': ['F NWY R NWG'], 'FRANCE': [], 'GERMANY': [], 'ITALY': [], 'RUSSIA': [], 'TURKEY': []}
+F1902M: {'AUSTRIA': ['A VIE - TRI', 'A SER S A VIE - TRI', 'F ALB S A VIE - TRI', 'A BUD S A VIE - TRI'], 'ENGLAND': ['A YOR - NWY VIA', 'F NTH - EDI', 'F EDI S F NTH - YOR', 'F NWG H'], 'FRANCE': [], 'GERMANY': ['A HOL - BEL', 'F DEN - NTH', 'A MUN - RUH', 'A KIE H'], 'ITALY': ['A TUN - NAF', 'F ION H', 'A TRI H'], 'RUSSIA': ['A GAL H', 'A MOS H', 'F NWY H', 'F RUM H', 'A SEV H', 'F STP/NC H'], 'TURKEY': ['A ARM - SEV', 'F BLA S A ARM - SEV', 'A GRE - BUL', 'F SMY - AEG']}
+F1902R: {'AUSTRIA': [], 'ENGLAND': [], 'FRANCE': [], 'GERMANY': [], 'ITALY': ['A TRI R VEN'], 'RUSSIA': ['A SEV R UKR'], 'TURKEY': []}
+W1902A: {'AUSTRIA': [], 'ENGLAND': ['F EDI D'], 'FRANCE': ['A MAR B'], 'GERMANY': ['A BER B'], 'ITALY': [], 'RUSSIA': [], 'TURKEY': ['F ANK B']}
+S1903M: {'AUSTRIA': ['F ALB S A SER - GRE', 'A BUD S A GAL', 'A SER - GRE', 'A TRI S A BUD'], 'ENGLAND': ['F NTH - NWY', 'F NWG S F NTH - NWY', 'A YOR - EDI'], 'FRANCE': ['A BUR S A MAR', 'A GAS S A BUR', 'A MAR S A BUR', 'F SPA/SC H'], 'GERMANY': ['A BEL - HOL', 'A KIE - MUN', 'A RUH S A KIE - MUN', 'A BER S A KIE - MUN', 'F DEN H'], 'ITALY': ['F ION - ADR', 'A VEN - ROM', 'A NAF S F ION - TUN'], 'RUSSIA': ['A UKR S F RUM', 'A GAL S F RUM', 'F RUM - BLA', 'A MOS - SEV'], 'TURKEY': ['A BUL - GRE', 'F AEG S A BUL - GRE', 'A SEV - RUM', 'F BLA S A SEV - RUM', 'F ANK - CON']}
+S1903R: {'AUSTRIA': [], 'ENGLAND': [], 'FRANCE': [], 'GERMANY': [], 'ITALY': [], 'RUSSIA': ['F NWY R SWE'], 'TURKEY': []}
+
+### Strategic Notes
+- Keep track of alliances and betrayals
+- Monitor expansion of neighboring powers

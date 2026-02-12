@@ -75,4 +75,11 @@ export interface GameSummary {
   lastPhase: string;
   powers: string[];
   hasLog: boolean;
+  // Enhanced fields for home page cards
+  meta: { backend: string | null; model: string | null } | null;
+  gameOver: boolean;
+  finalStandings: { power: string; scs: number }[];
+  /** Territory ownership from the last phase, for map thumbnail coloring */
+  finalCenters: Record<string, string[]>;
+  finalInfluence: Record<string, string[]>;
 }

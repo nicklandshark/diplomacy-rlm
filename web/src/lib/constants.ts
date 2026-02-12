@@ -1,9 +1,3 @@
-export const ALL_POWERS = [
-  "AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"
-] as const;
-
-export type PowerName = (typeof ALL_POWERS)[number];
-
 export const POWER_COLORS: Record<string, string> = {
   AUSTRIA: "#c48f85",
   ENGLAND: "darkviolet",
@@ -24,8 +18,6 @@ export const POWER_DISPLAY_COLORS: Record<string, string> = {
   TURKEY: "#d4c12e",
 };
 
-export const PHASE_REGEX = /^[SFW]\d{4}[MRA]$/;
-
 export function phaseDisplayName(phase: string): string {
   if (!phase || phase === "COMPLETED") return phase;
   const season = phase[0] === "S" ? "Spring" : phase[0] === "F" ? "Fall" : "Winter";
@@ -34,6 +26,20 @@ export function phaseDisplayName(phase: string): string {
   return `${season} ${year} ${type}`;
 }
 
+const SEASON_ORDER: Record<string, number> = { S: 0, F: 1, W: 2 };
+const TYPE_ORDER: Record<string, number> = { M: 0, R: 1, A: 2 };
+
+/** Chronological sort for Diplomacy phase strings like S1901M, F1901M, W1901A. */
 export function phaseSort(a: string, b: string): number {
-  return a.localeCompare(b);
+  const yearA = parseInt(a.slice(1, 5), 10);
+  const yearB = parseInt(b.slice(1, 5), 10);
+  if (yearA !== yearB) return yearA - yearB;
+
+  const seasonA = SEASON_ORDER[a[0]] ?? 9;
+  const seasonB = SEASON_ORDER[b[0]] ?? 9;
+  if (seasonA !== seasonB) return seasonA - seasonB;
+
+  const typeA = TYPE_ORDER[a[5]] ?? 9;
+  const typeB = TYPE_ORDER[b[5]] ?? 9;
+  return typeA - typeB;
 }

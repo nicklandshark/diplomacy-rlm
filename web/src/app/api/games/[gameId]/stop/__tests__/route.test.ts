@@ -54,23 +54,36 @@ describe("POST /api/games/[gameId]/stop", () => {
     });
 
     it("accepts valid gameId format", async () => {
-      // No PID file, but format is valid — should get 404, not 400
+      // No PID file, but format is valid — should be treated as already stopped.
       fs.mkdirSync(path.join(tmpDir, "game42"));
       const POST = await getHandler();
       const res = await POST(new Request("http://localhost"), makeParams("game42"));
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
+      expect((await res.json()).status).toBe("already_stopped");
     });
   });
 
   // ── Missing PID file ──────────────────────────────────────────────────
   describe("missing PID file", () => {
-    it("returns 404 when .pid file does not exist", async () => {
+    it("returns already_stopped when .pid file does not exist", async () => {
       fs.mkdirSync(path.join(tmpDir, "game1"));
 
       const POST = await getHandler();
       const res = await POST(new Request("http://localhost"), makeParams("game1"));
-      expect(res.status).toBe(404);
-      expect((await res.json()).error).toMatch(/No PID file/);
+      expect(res.status).toBe(200);
+      expect((await res.json()).status).toBe("already_stopped");
+    });
+
+    it("cleans stale .api_port marker when .pid is missing", async () => {
+      const gameDir = path.join(tmpDir, "game1");
+      fs.mkdirSync(gameDir);
+      fs.writeFileSync(path.join(gameDir, ".api_port"), "3100");
+
+      const POST = await getHandler();
+      const res = await POST(new Request("http://localhost"), makeParams("game1"));
+      expect(res.status).toBe(200);
+      expect((await res.json()).status).toBe("already_stopped");
+      expect(fs.existsSync(path.join(gameDir, ".api_port"))).toBe(false);
     });
   });
 
@@ -276,15 +289,15 @@ describe("POST /api/games/[gameId]/stop", () => {
       fs.mkdirSync(path.join(tmpDir, "game0"));
       const POST = await getHandler();
       const res = await POST(new Request("http://localhost"), makeParams("game0"));
-      // Should be 404 (no PID file) not 400 (invalid format)
-      expect(res.status).toBe(404);
+      // Should be 200 (already_stopped) not 400 (invalid format)
+      expect(res.status).toBe(200);
     });
 
     it("accepts gameId: 'game999999'  (very large number)", async () => {
       fs.mkdirSync(path.join(tmpDir, "game999999"));
       const POST = await getHandler();
       const res = await POST(new Request("http://localhost"), makeParams("game999999"));
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(200);
     });
 
     it("rejects gameId: 'game1 '  (trailing space)", async () => {
