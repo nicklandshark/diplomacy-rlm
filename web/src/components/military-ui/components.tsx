@@ -1,5 +1,4 @@
-// Shared Military UI Components
-// These are the actual components from the military-ui-kit that should be reused
+// Shared military UI components used by the main app.
 
 // Rivet - Steel rivet with depth and cross slot
 export const Rivet = ({ x, y, size = 8, style }: { x?: number; y?: number; size?: number; style?: React.CSSProperties }) => (
@@ -231,7 +230,7 @@ export const CommandButton = ({ children, variant = "primary", disabled = false,
   );
 };
 
-// OrderItem - From military-ui-kit
+// OrderItem
 export const OrderItem = ({ territory, unitType, order, status }: any) => {
   const statusColors = {
     success: { border: "#4a7c59", glow: "rgba(74, 124, 89, 0.3)", text: "text-[#4a7c59]", icon: "✓" },
@@ -269,7 +268,7 @@ export const OrderItem = ({ territory, unitType, order, status }: any) => {
   );
 };
 
-// MessageBubble - From military-ui-kit
+// MessageBubble
 export const MessageBubble = ({ from, to, content, timestamp }: any) => (
   <div className="relative bg-[#1a1a1a] border-2 border-[#3a3a3a] p-3 mb-2">
     <Rivet size={5} style={{ left: "8px", top: "8px" }} />
@@ -287,7 +286,7 @@ export const MessageBubble = ({ from, to, content, timestamp }: any) => (
   </div>
 );
 
-// PhaseTimeline - From military-ui-kit
+// PhaseTimeline
 export const PhaseTimeline = ({ phases, currentIndex }: any) => (
   <div className="relative bg-[#1a1a1a] border-2 border-[#3a3a3a] p-6 overflow-hidden">
 
@@ -323,7 +322,7 @@ export const PhaseTimeline = ({ phases, currentIndex }: any) => (
   </div>
 );
 
-// ActionLog - From military-ui-kit
+// ActionLog
 export const ActionLog = ({ actions }: any) => (
   <div className="relative bg-[#1a1a1a] border-2 border-[#3a3a3a] overflow-hidden">
     <Rivet size={6} style={{ left: "10px", top: "10px" }} />

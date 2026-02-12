@@ -23,7 +23,7 @@ import { SummaryPanel } from "./SummaryPanel";
 import { PhaseTimeline } from "./PhaseTimeline";
 import { PhaseTransition } from "./PhaseTransition";
 import { ActivityFeed } from "./ActivityFeed";
-import { TacticalPanel, Rivet, TacticalTabGroup, GlassPane } from "@/app/military-ui-kit/components";
+import { TacticalPanel, Rivet, TacticalTabGroup, GlassPane } from "@/components/military-ui/components";
 import CRTScreenOverlay from "./CRTScreenOverlay";
 import { LeaderboardDrawer } from "./LeaderboardDrawer";
 

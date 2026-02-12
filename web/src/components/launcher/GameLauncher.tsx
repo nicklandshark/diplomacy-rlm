@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { POWER_DISPLAY_COLORS } from "@/lib/constants";
-import { Rivet } from "@/app/military-ui-kit/components";
+import { Rivet } from "@/components/military-ui/components";
 import FlapSelect, { FlapCell } from "@/components/ui/FlapSelect";
 
 const ALL_POWERS = [

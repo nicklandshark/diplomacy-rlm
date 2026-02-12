@@ -4,7 +4,7 @@ import { usePowerStatus, type PowerStatus } from "@/hooks/usePowerStatus";
 import { powerFlag } from "@/lib/power-flags";
 import { POWER_DISPLAY_COLORS } from "@/lib/constants";
 import type { LiveEvent } from "@/lib/types";
-import { Rivet } from "@/app/military-ui-kit/components";
+import { Rivet } from "@/components/military-ui/components";
 
 interface PowerBadgesProps {
   powers: string[];

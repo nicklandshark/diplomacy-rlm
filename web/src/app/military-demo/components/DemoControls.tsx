@@ -1,6 +1,6 @@
 "use client";
 
-import { TacticalPanel, CommandButton } from "@/app/military-ui-kit/components";
+import { TacticalPanel, CommandButton } from "@/components/military-ui/components";
 
 interface DemoControlsProps {
   onReset: () => void;

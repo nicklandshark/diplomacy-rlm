@@ -4,7 +4,7 @@ import Link from "next/link";
 import { listGames } from "@/lib/game-data";
 import { POWER_DISPLAY_COLORS, phaseDisplayName } from "@/lib/constants";
 import GameLauncher from "@/components/launcher/GameLauncher";
-import { Rivet } from "@/app/military-ui-kit/components";
+import { Rivet } from "@/components/military-ui/components";
 import MiniMap from "@/components/map/MiniMap";
 
 export const dynamic = "force-dynamic";

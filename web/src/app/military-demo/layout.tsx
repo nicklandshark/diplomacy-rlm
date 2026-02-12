@@ -26,9 +26,8 @@ export default function MilitaryDemoLayout({ children }: { children: React.React
             url: "/mockServiceWorker.js",
           },
           onUnhandledRequest: "bypass",
-          quiet: false, // Log all MSW activity
+          quiet: true,
         });
-        console.log("[MSW] Service worker started successfully");
         setMswReady(true);
       }
     };
