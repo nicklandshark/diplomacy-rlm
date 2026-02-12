@@ -6,6 +6,16 @@ function getGamesDir(): string {
   return path.resolve(process.cwd(), process.env.GAMES_DIR || "../runs");
 }
 
+function cleanupMarkers(gameDir: string): void {
+  for (const marker of [".pid", ".api_port"]) {
+    try {
+      fs.unlinkSync(path.join(gameDir, marker));
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+}
+
 function tryKillProcess(pid: number): "stopped" | "already_stopped" | string {
   try {
     // Send SIGTERM to the process group (negative PID kills the group)
@@ -42,13 +52,16 @@ export async function POST(
   }
 
   const gameDir = path.join(getGamesDir(), gameId);
+  if (!fs.existsSync(gameDir)) {
+    return NextResponse.json({ error: "Game not found" }, { status: 404 });
+  }
   const pidFile = path.join(gameDir, ".pid");
 
   if (!fs.existsSync(pidFile)) {
-    return NextResponse.json(
-      { error: "No PID file found — game may not be running or was not launched with --serve-web/--serve-api" },
-      { status: 404 }
-    );
+    // Common case: the game already exited and cleaned up .pid on shutdown.
+    // Treat this as idempotent stop success rather than a hard error.
+    cleanupMarkers(gameDir);
+    return NextResponse.json({ status: "already_stopped", gameId, reason: "missing_pid" });
   }
 
   const pidStr = fs.readFileSync(pidFile, "utf-8").trim();
@@ -60,8 +73,7 @@ export async function POST(
 
   const result = tryKillProcess(pid);
 
-  // Clean up the PID file regardless of outcome
-  try { fs.unlinkSync(pidFile); } catch {}
+  cleanupMarkers(gameDir);
 
   if (result === "stopped") {
     return NextResponse.json({ status: "stopped", gameId, pid });
