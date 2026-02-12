@@ -1,11 +1,11 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import type { LiveEvent, GameLogEvent } from "../../../../../web/src/lib/types";
-import type { PowerStatus } from "../../../../../web/src/hooks/usePowerStatus";
-import { POWER_DISPLAY_COLORS } from "../../../../../web/src/lib/constants";
-import { powerFlag } from "../../../../../web/src/lib/power-flags";
-import { shouldRender } from "../../../../../web/src/components/activity/ActivityItem";
+import type { LiveEvent, GameLogEvent } from "@/lib/types";
+import type { PowerStatus } from "@/hooks/usePowerStatus";
+import { POWER_DISPLAY_COLORS } from "@/lib/constants";
+import { powerFlag } from "@/lib/power-flags";
+import { shouldRender } from "@/components/activity/ActivityItem";
 import {
   appendUniquePrintedLine,
   advanceTypedLine,

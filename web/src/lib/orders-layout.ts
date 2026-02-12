@@ -1,10 +1,10 @@
 import type { PhaseResults } from "./types";
 import { parseOrder } from "./parse-orders";
 
-export type OrderResolution = "resolved" | "failed" | "void" | "pending";
-export type OrdersPanelLayoutMode = "compact" | "normal" | "wide";
+type OrderResolution = "resolved" | "failed" | "void" | "pending";
+type OrdersPanelLayoutMode = "compact" | "normal" | "wide";
 
-export interface OrderRowModel {
+interface OrderRowModel {
   unit: string;
   order: string;
   resolution: OrderResolution;

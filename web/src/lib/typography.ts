@@ -6,12 +6,3 @@ export const FONT_ROLE_FAMILIES = {
   title: "Tanker",
   phaseAndMemory: "Kawingan",
 } as const;
-
-export const FONT_ROLE_CLASSES = {
-  baseSans: "font-ui-sans",
-  panelHeadingButton: "font-ui-panel",
-  activityMono: "font-ui-activity",
-  ordersMessagesSummary: "font-ui-orders",
-  title: "font-ui-title",
-  phaseAndMemory: "font-ui-phase-memory",
-} as const;

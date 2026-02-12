@@ -2,7 +2,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 
-export interface UnitTransitionProps {
+interface UnitTransitionProps {
   /** SVG symbol id — "Army" or "Fleet" */
   symbol: string;
   /** CSS class for power coloring, e.g. "unitfrance" */

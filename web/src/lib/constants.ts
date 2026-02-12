@@ -1,9 +1,3 @@
-export const ALL_POWERS = [
-  "AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"
-] as const;
-
-export type PowerName = (typeof ALL_POWERS)[number];
-
 export const POWER_COLORS: Record<string, string> = {
   AUSTRIA: "#c48f85",
   ENGLAND: "darkviolet",
@@ -23,8 +17,6 @@ export const POWER_DISPLAY_COLORS: Record<string, string> = {
   RUSSIA: "#9ba3b7",
   TURKEY: "#d4c12e",
 };
-
-export const PHASE_REGEX = /^[SFW]\d{4}[MRA]$/;
 
 export function phaseDisplayName(phase: string): string {
   if (!phase || phase === "COMPLETED") return phase;

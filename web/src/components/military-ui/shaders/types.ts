@@ -1,7 +1,7 @@
-export type MaterialPresetKey = "steel" | "brass" | "leather";
+type MaterialPresetKey = "steel" | "brass" | "leather";
 export type Vec3 = [number, number, number];
 
-export interface MaterialPreset {
+interface MaterialPreset {
   key: MaterialPresetKey;
   tint: Vec3;
   ambient: number;

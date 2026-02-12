@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { getStrictWebGLContext, type Vec3 } from "./types";
 
-export interface GlassPaneProps {
+interface GlassPaneProps {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;

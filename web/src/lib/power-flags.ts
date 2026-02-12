@@ -16,5 +16,3 @@ export function powerFlag(power: string): string {
 export function powerShort(power: string): string {
   return POWER_FLAGS[power]?.short || power;
 }
-
-export default POWER_FLAGS;

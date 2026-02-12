@@ -171,7 +171,7 @@ export function readAllMessages(gameId: string): Message[] {
   return all;
 }
 
-export interface GameSummaryData {
+interface GameSummaryData {
   phases: string[];
   scHistory: Record<string, number[]>;  // power -> SC count per phase
   finalStandings: { power: string; scs: number; units: number }[];

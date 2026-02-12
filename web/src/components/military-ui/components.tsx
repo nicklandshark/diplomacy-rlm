@@ -226,4 +226,3 @@ export const TacticalTabGroup = ({ tabs, activeTab, onTabChange, badge }: {
 );
 
 export { GlassPane } from "./shaders/GlassPane";
-export type { GlassPaneProps } from "./shaders/GlassPane";

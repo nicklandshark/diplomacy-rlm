@@ -35,5 +35,3 @@ export function provinceFromSvgId(id: string): string | null {
   if (!id || !id.startsWith("_")) return null;
   return id.slice(1).toUpperCase();
 }
-
-export default LOCATIONS;
